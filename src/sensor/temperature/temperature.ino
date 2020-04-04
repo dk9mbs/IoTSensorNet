@@ -19,7 +19,7 @@
 #include <ESP8266WebServer.h>
 #define TEST_DEEPSLEEP true
 #define ONEWIREBUSPIN 4
-#define SETUPPIN 16
+#define SETUPPIN 5
 
 OneWire  ds(2); 
 OneWire oneWire(ONEWIREBUSPIN);
@@ -36,15 +36,18 @@ int value = 0;
 int modeSleepTimeSec=60;
 char packetBuffer[UDP_TX_PACKET_MAX_SIZE + 1];
 boolean modeDeepSleep=false;
-boolean runSetup=true;
+boolean runSetup=false;
 
 void setup() { 
   Serial.begin(115200);
   setupIo;
   setupFileSystem();
 
-  runSetup = !digitalRead(SETUPPIN);
-
+  if(digitalRead(SETUPPIN)==0) runSetup=true;
+  
+  Serial.print("Setup:");
+  Serial.println(digitalRead(SETUPPIN));
+  
   if(runSetup) {
     setupWifiAP();
     setupHttpAdmin();
@@ -86,6 +89,7 @@ void setup() {
 void loop() {
   if(runSetup) {
     httpServer.handleClient(); 
+    //Serial.println(digitalRead(5));
   } else {
     Serial.println("reading the sensors...");
     if (!client.connected()) {
@@ -148,6 +152,11 @@ void handleHttpRoot() {
     "<P>Admin portal"
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Admin Password</div><INPUT style=\"width:99%;\" type=\"text\" name=\"ADMINPWD\" value=\""+ readConfigValue("adminpwd") +"\"></div>"
     "</P>"
+    "</P>"
+    "<P>MQTT Broker"
+    "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Static mqtt broker address (if empty then dynamic)</div><INPUT style=\"width:99%;\" type=\"text\" name=\"STATICBROKERADDR\" value=\""+ readConfigValue("staticbrokeraddr") +"\"></div>"
+    "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Static mqtt broker port</div><INPUT style=\"width:99%;\" type=\"text\" name=\"STATICBROKERPORT\" value=\""+ readConfigValue("staticbrokerport") +"\"></div>"
+    "</P>"
     "<div><INPUT type=\"submit\" value=\"Send\"> <INPUT type=\"reset\"></div>"
     "</FORM>"
     "</body>"
@@ -162,6 +171,8 @@ void handleSubmit() {
   saveConfigValue("password", httpServer.arg("PASSWORD"));
   saveConfigValue("sleeptime", httpServer.arg("SLEEPTIME"));
   saveConfigValue("adminpwd", httpServer.arg("ADMINPWD"));
+  saveConfigValue("staticbrokeraddr", httpServer.arg("STATICBROKERADDR"));
+  saveConfigValue("staticbrokerport", httpServer.arg("STATICBROKERPORT"));
 }
 
 void handleHttp404() {
@@ -181,7 +192,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
 }
 
 void setupIo() {
-  pinMode(SETUPPIN,INPUT_PULLUP);
+  pinMode(SETUPPIN,INPUT);
 }
 
 void setupFileSystem() {
@@ -190,25 +201,31 @@ void setupFileSystem() {
     SPIFFS.begin(); 
   }
 
+  
+  if(!SPIFFS.exists(getConfigFilename("mac"))) {
+    String mac=WiFi.macAddress();
+    mac.replace(":","-");
+    saveConfigValue("mac", mac);
+  }
   if(!SPIFFS.exists(getConfigFilename("ssid"))) saveConfigValue("ssid", "wlan-ssid");
   if(!SPIFFS.exists(getConfigFilename("password"))) saveConfigValue("password", "wlan-password");
-  if(!SPIFFS.exists(getConfigFilename("mac"))) saveConfigValue("mac", WiFi.macAddress());
   if(!SPIFFS.exists(getConfigFilename("mode"))) saveConfigValue("mode", "deepsleep");
   if(!SPIFFS.exists(getConfigFilename("sleeptime"))) saveConfigValue("sleeptime", "60");
   if(!SPIFFS.exists(getConfigFilename("adminpwd"))) saveConfigValue("adminpwd", "123456789ff");
+
+  if(!SPIFFS.exists(getConfigFilename("staticbrokeraddr"))) saveConfigValue("staticbrokeraddr", "");
+  if(!SPIFFS.exists(getConfigFilename("staticbrokerport"))) saveConfigValue("staticbrokerport", "1883");
+
 }
 
 void setupWifiAP(){
+  Serial.println("Setup shell is starting ...");
   String pwd=readConfigValue("adminpwd");
+  Serial.print("Password for AP:");
+  Serial.println(pwd);
   
-  WiFi.mode(WIFI_STA);
-  
+  WiFi.mode(WIFI_AP);
   WiFi.softAP("sensor.iot.dk9mbs.de", pwd);
-  
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
 
   Serial.println("AP started");
 
@@ -219,10 +236,16 @@ void setupWifiSTA(const char* ssid, const char* password, const char* newMacStr)
   byte newMac[6];
   parseBytes(newMacStr, '-', newMac, 6, 16);
 
-  //ESP.eraseConfig();
-  //WiFi.setAutoConnect(true);
-  WiFi.setAutoReconnect(true);
-
+  if(modeDeepSleep) {
+    ESP.eraseConfig();
+    //WiFi.setAutoConnect(true);
+    WiFi.setAutoReconnect(true);
+  } else {
+    //ESP.eraseConfig();
+    //WiFi.setAutoConnect(true);
+    WiFi.setAutoReconnect(true);
+  }
+  
   wifi_set_macaddr(0, const_cast<uint8*>(newMac));
   Serial.println("mac address is set");
 
@@ -230,9 +253,13 @@ void setupWifiSTA(const char* ssid, const char* password, const char* newMacStr)
   Serial.print("Connecting to ");
   Serial.println(ssid);
   WiFi.mode(WIFI_STA);
-
+  Serial.print("Password:");
+  Serial.println("***********");
+  
   WiFi.begin(ssid, password);
-
+  
+  Serial.println("after WiFi.begin():");
+  
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
@@ -333,12 +360,23 @@ void reconnect(const char* clientName) {
   }
   while (!client.connected()) {
     //
-    String clientInfo=String(sendConfigRequestandWaitForResponse("WHOISMQTTBROKER"));
-    Serial.print("Clientinfo from udp client service:");
-    Serial.println(clientInfo);
-    String udpTopic=split(clientInfo,';',0);
-    String mqttBroker=split(clientInfo,';',1);
-    int mqttPort=split(clientInfo,';',2).toInt();
+    String mqttBroker;
+    int mqttPort;
+    String staticBroker=readConfigValue("staticbrokeraddr");
+
+    if(staticBroker=="") {
+      String clientInfo=String(sendConfigRequestandWaitForResponse("WHOISMQTTBROKER"));
+      Serial.print("Clientinfo from udp client service:");
+      Serial.println(clientInfo);
+      String udpTopic=split(clientInfo,';',0);
+      mqttBroker=split(clientInfo,';',1);
+      mqttPort=split(clientInfo,';',2).toInt();
+    } else {
+      Serial.println("use static mqtt broker address!");
+      mqttBroker=staticBroker;
+      mqttPort=readConfigValue("staticbrokerport").toInt();
+    }
+
   
     Serial.print("MQTT Boker:");
     Serial.println(mqttBroker);
