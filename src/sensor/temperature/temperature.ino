@@ -17,6 +17,8 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <ESP8266WebServer.h>
+#include <ESP8266HTTPClient.h>
+
 #define TEST_DEEPSLEEP true
 #define ONEWIREBUSPIN 4
 #define SETUPPIN 5
@@ -26,7 +28,7 @@ OneWire oneWire(ONEWIREBUSPIN);
 DallasTemperature sensors(&oneWire);
 WiFiUDP udp;
 WiFiClient espClient;
-PubSubClient client(espClient);
+//PubSubClient client(espClient);
 ESP8266WebServer httpServer(80);
 
 const char* broadcastAddress="192.168.2.255";
@@ -37,6 +39,9 @@ int modeSleepTimeSec=60;
 char packetBuffer[UDP_TX_PACKET_MAX_SIZE + 1];
 boolean modeDeepSleep=false;
 boolean runSetup=false;
+long loopDelay=0;
+
+HTTPClient http;
 
 void setup() { 
   Serial.begin(115200);
@@ -69,7 +74,7 @@ void setup() {
       Serial.println(modeSleepTimeSec);
     }
     
-    setupWifiSTA(readConfigValue("ssid").c_str(), readConfigValue("password").c_str(), readConfigValue("mac").c_str());
+    setupWifiSTA(readConfigValue("ssid").c_str(), readConfigValue("password").c_str(), readConfigValue("mac").c_str(), modeDeepSleep);
     
     sensors.begin();
   
@@ -78,7 +83,7 @@ void setup() {
     udp.begin(localPort);
     delay(100);
     
-    reconnect(WiFi.macAddress().c_str());
+    //reconnect(WiFi.macAddress().c_str(), client, modeDeepSleep);
   } 
 
 
@@ -89,29 +94,140 @@ void setup() {
 void loop() {
   if(runSetup) {
     httpServer.handleClient(); 
-    //Serial.println(digitalRead(5));
   } else {
-    Serial.println("reading the sensors...");
+    /*
     if (!client.connected()) {
       Serial.println("Broker is not connected!");
-      reconnect(WiFi.macAddress().c_str());
+      reconnect(WiFi.macAddress().c_str(), client, modeDeepSleep);
     }
-    client.loop();
-    temp();
 
+    client.loop();
+    */
+    delay(10);
     
+    long now = millis();
+    if (now - loopDelay > modeSleepTimeSec*1000 || loopDelay==0) {
+
+        Serial.println("TTL");
+        temp();
+        loopDelay = now;
+    }
+
+
+    /*    
     if(modeDeepSleep) {
       Serial.println("good night...");
       WiFi.disconnect();
       ESP.deepSleep(modeSleepTimeSec*1000000);
       delay(2000);
-    } else {
-      delay(modeSleepTimeSec*1000);
     }
-
+    delay(100);
+    */ 
   }
 }
 
+// ############# HTTP REQUEST ################ //
+
+String makeRequest(String path, String payload)
+{
+  // wait for WiFi connection
+  if ((WiFi.status() == WL_CONNECTED)) {
+
+
+    Serial.print("[HTTP] begin...\n");
+    http.begin(espClient, "http://dk0ay.dk9mbs.de/mqtt.php"); 
+    http.addHeader("Content-Type", "application/json");
+
+    Serial.print("[HTTP] POST...\n");
+    //int httpCode = http.POST("{\"hello\":\"world\"}");
+    int httpCode = http.POST(payload);
+    
+    // httpCode will be negative on error
+    if (httpCode > 0) {
+      // HTTP header has been send and Server response header has been handled
+      Serial.printf("[HTTP] POST... code: %d\n", httpCode);
+
+      // file found at server
+      if (httpCode == HTTP_CODE_OK) {
+        const String& payload = http.getString();
+        Serial.println("received payload:\n<<");
+        Serial.println(payload);
+        Serial.println(">>");
+      }
+    } else {
+      Serial.printf("[HTTP] POST... failed, error: %s\n", http.errorToString(httpCode).c_str());
+    }
+
+    http.end();
+  }
+
+}
+
+// ###################################### //
+
+/*
+void reconnect(const char* clientName, PubSubClient client, boolean modeDeepSleep) {
+  
+  if(client.connected()) return;
+  
+  Serial.print("Wifi status:");
+  Serial.println(WiFi.status());
+  
+  if(WiFi.status()!=WL_CONNECTED) {
+    Serial.println("Wifi not connected!");
+    setupWifiSTA(readConfigValue("ssid").c_str(), readConfigValue("password").c_str(), readConfigValue("mac").c_str(), modeDeepSleep);
+  }
+
+  String user=readConfigValue("brokeruser");
+  String pwd=readConfigValue("brokerpwd");
+  String staticBroker=readConfigValue("staticbrokeraddr");
+  int attempt=0;
+  
+  while (!client.connected()) {
+    //
+    String mqttBroker;
+    int mqttPort;
+    if(staticBroker=="") {
+      String clientInfo=String(sendConfigRequestandWaitForResponse("WHOISMQTTBROKER"));
+      Serial.print("Clientinfo from udp client service:");
+      Serial.println(clientInfo);
+      String udpTopic=split(clientInfo,';',0);
+      mqttBroker=split(clientInfo,';',1);
+      mqttPort=split(clientInfo,';',2).toInt();
+    } else {
+      Serial.println("use static mqtt broker address!");
+      mqttBroker=staticBroker;
+      mqttPort=readConfigValue("staticbrokerport").toInt();
+    }
+
+  
+    Serial.print("MQTT Boker:");
+    Serial.println(mqttBroker);
+    Serial.print("MQTT Port:");
+    Serial.println(mqttPort);
+
+    client.setServer(mqttBroker.c_str(), mqttPort);
+    client.setCallback(callback);
+    
+    
+    Serial.print("Attempting MQTT connection...");
+    if (client.connect(clientName, user.c_str(),pwd.c_str())) {
+      Serial.println("connected");
+      client.publish("outTopic", "hello world");
+      client.subscribe("event");
+      client.loop();
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      delay(5000);
+      attempt++;
+      if(attempt==3) return;
+    }
+  }
+}
+*/
 
 // http server
 void setupHttpAdmin() {
@@ -156,6 +272,8 @@ void handleHttpRoot() {
     "<P>MQTT Broker"
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Static mqtt broker address (if empty then dynamic)</div><INPUT style=\"width:99%;\" type=\"text\" name=\"STATICBROKERADDR\" value=\""+ readConfigValue("staticbrokeraddr") +"\"></div>"
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Static mqtt broker port</div><INPUT style=\"width:99%;\" type=\"text\" name=\"STATICBROKERPORT\" value=\""+ readConfigValue("staticbrokerport") +"\"></div>"
+    "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Username</div><INPUT style=\"width:99%;\" type=\"text\" name=\"BROKERUSER\" value=\""+ readConfigValue("brokeruser") +"\"></div>"
+    "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Password</div><INPUT style=\"width:99%;\" type=\"text\" name=\"BROKERPWD\" value=\""+ readConfigValue("brokerpwd") +"\"></div>"
     "</P>"
     "<div><INPUT type=\"submit\" value=\"Send\"> <INPUT type=\"reset\"></div>"
     "</FORM>"
@@ -173,6 +291,8 @@ void handleSubmit() {
   saveConfigValue("adminpwd", httpServer.arg("ADMINPWD"));
   saveConfigValue("staticbrokeraddr", httpServer.arg("STATICBROKERADDR"));
   saveConfigValue("staticbrokerport", httpServer.arg("STATICBROKERPORT"));
+  saveConfigValue("brokeruser", httpServer.arg("BROKERUSER"));
+  saveConfigValue("brokerpwd", httpServer.arg("BROKERPWD"));
 }
 
 void handleHttp404() {
@@ -216,6 +336,9 @@ void setupFileSystem() {
   if(!SPIFFS.exists(getConfigFilename("staticbrokeraddr"))) saveConfigValue("staticbrokeraddr", "");
   if(!SPIFFS.exists(getConfigFilename("staticbrokerport"))) saveConfigValue("staticbrokerport", "1883");
 
+  if(!SPIFFS.exists(getConfigFilename("brokeruser"))) saveConfigValue("brokeruser", "username");
+  if(!SPIFFS.exists(getConfigFilename("brokerpwd"))) saveConfigValue("brokerpwd", "password");
+
 }
 
 void setupWifiAP(){
@@ -231,7 +354,7 @@ void setupWifiAP(){
 
 }
 
-void setupWifiSTA(const char* ssid, const char* password, const char* newMacStr) {
+void setupWifiSTA(const char* ssid, const char* password, const char* newMacStr, boolean modeDeepSleep) {
   uint8_t mac[6];
   byte newMac[6];
   parseBytes(newMacStr, '-', newMac, 6, 16);
@@ -241,7 +364,7 @@ void setupWifiSTA(const char* ssid, const char* password, const char* newMacStr)
     //WiFi.setAutoConnect(true);
     WiFi.setAutoReconnect(true);
   } else {
-    //ESP.eraseConfig();
+    ESP.eraseConfig();//ein
     //WiFi.setAutoConnect(true);
     WiFi.setAutoReconnect(true);
   }
@@ -282,6 +405,8 @@ void setupWifiSTA(const char* ssid, const char* password, const char* newMacStr)
 }
 
 void temp() {
+  Serial.println("reading the sensors...");
+
   sensors.requestTemperatures();
   delay(500);
    
@@ -301,9 +426,10 @@ void temp() {
 
     dtostrf(temperatureC,7, 3, temperaturenow);  //// convert float to char
     String payload = "{\"temp\":"+String(temperatureC)+", \"address\":\""+String(address)+"\"}";
-    client.publish("temp/sensor", (char*)payload.c_str());
+    //client.publish("temp/sensor", (char*)payload.c_str());
+    makeRequest("/sensor/test", payload);
     
-    delay(500);
+    //delay(500);
   }
 
 }
@@ -351,56 +477,6 @@ void sendUdp(const char* msg, unsigned int port) {
 }
 
 
-void reconnect(const char* clientName) {
-  Serial.print("Wifi status:");
-  Serial.println(WiFi.status());
-  if(WiFi.status()!=WL_CONNECTED) {
-    Serial.println("Wifi not connected!");
-    return;
-  }
-  while (!client.connected()) {
-    //
-    String mqttBroker;
-    int mqttPort;
-    String staticBroker=readConfigValue("staticbrokeraddr");
-
-    if(staticBroker=="") {
-      String clientInfo=String(sendConfigRequestandWaitForResponse("WHOISMQTTBROKER"));
-      Serial.print("Clientinfo from udp client service:");
-      Serial.println(clientInfo);
-      String udpTopic=split(clientInfo,';',0);
-      mqttBroker=split(clientInfo,';',1);
-      mqttPort=split(clientInfo,';',2).toInt();
-    } else {
-      Serial.println("use static mqtt broker address!");
-      mqttBroker=staticBroker;
-      mqttPort=readConfigValue("staticbrokerport").toInt();
-    }
-
-  
-    Serial.print("MQTT Boker:");
-    Serial.println(mqttBroker);
-    Serial.print("MQTT Port:");
-    Serial.println(mqttPort);
-  
-    client.setServer(mqttBroker.c_str(), mqttPort);
-    client.setCallback(callback);
-    //
-    
-    Serial.print("Attempting MQTT connection...");
-    if (client.connect(clientName)) {
-
-      Serial.println("connected");
-      // client.subscribe("event");
-    } else {
-      Serial.print("failed, rc=");
-      Serial.print(client.state());
-      Serial.println(" try again in 5 seconds");
-      // Wait 5 seconds before retrying
-      delay(5000);
-    }
-  }
-}
 
 
 String deviceAddress2String(DeviceAddress deviceAddress){
