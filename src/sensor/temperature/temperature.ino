@@ -3,7 +3,7 @@
  * https://arduino-esp8266.readthedocs.io/en/latest/esp8266wifi/station-class.html
  * https://gist.github.com/bbx10/5a2885a700f30af75fc5
  * https://github.com/esp8266/Arduino/blob/4897e0006b5b0123a2fa31f67b14a3fff65ce561/libraries/ESP8266WiFi/src/include/wl_definitions.h
- * 
+ * https://github.com/adafruit/Adafruit_MQTT_Library/blob/master/examples/mqtt_esp8266/mqtt_esp8266.ino
  * ToDo:
  * Mac Address in setupFileSystem: : replace : with -
 */
@@ -11,13 +11,16 @@
 
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
-#include <PubSubClient.h>
 #include <OneWire.h>
 #include <FS.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266HTTPClient.h>
+
+#include "Adafruit_MQTT.h"
+#include "Adafruit_MQTT_Client.h"
+
 
 #define TEST_DEEPSLEEP true
 #define ONEWIREBUSPIN 4
@@ -28,8 +31,10 @@ OneWire oneWire(ONEWIREBUSPIN);
 DallasTemperature sensors(&oneWire);
 WiFiUDP udp;
 WiFiClient espClient;
-//PubSubClient client(espClient);
 ESP8266WebServer httpServer(80);
+
+Adafruit_MQTT_Client mqtt(&espClient, "", 1883, "", "");
+
 
 const char* broadcastAddress="192.168.2.255";
 long lastMsg = 0;
@@ -45,10 +50,12 @@ HTTPClient http;
 
 void setup() { 
   Serial.begin(115200);
-  setupIo;
+  setupIo();
   setupFileSystem();
 
   if(digitalRead(SETUPPIN)==0) runSetup=true;
+
+
   
   Serial.print("Setup:");
   Serial.println(digitalRead(SETUPPIN));
@@ -73,9 +80,8 @@ void setup() {
       Serial.print("Delay between 2 measures in sec.:");
       Serial.println(modeSleepTimeSec);
     }
-    
+
     setupWifiSTA(readConfigValue("ssid").c_str(), readConfigValue("password").c_str(), readConfigValue("mac").c_str(), modeDeepSleep);
-    
     sensors.begin();
   
     delay(500);
@@ -83,7 +89,6 @@ void setup() {
     udp.begin(localPort);
     delay(100);
     
-    //reconnect(WiFi.macAddress().c_str(), client, modeDeepSleep);
   } 
 
 
@@ -95,34 +100,22 @@ void loop() {
   if(runSetup) {
     httpServer.handleClient(); 
   } else {
-    /*
-    if (!client.connected()) {
-      Serial.println("Broker is not connected!");
-      reconnect(WiFi.macAddress().c_str(), client, modeDeepSleep);
-    }
+    MQTT_connect();
 
-    client.loop();
-    */
-    delay(10);
-    
     long now = millis();
     if (now - loopDelay > modeSleepTimeSec*1000 || loopDelay==0) {
 
-        Serial.println("TTL");
         temp();
         loopDelay = now;
     }
 
 
-    /*    
     if(modeDeepSleep) {
       Serial.println("good night...");
       WiFi.disconnect();
       ESP.deepSleep(modeSleepTimeSec*1000000);
       delay(2000);
     }
-    delay(100);
-    */ 
   }
 }
 
@@ -165,6 +158,59 @@ String makeRequest(String path, String payload)
 
 // ###################################### //
 
+void MQTT_connect() {
+  int8_t ret;
+
+  // Stop if already connected.
+  if (mqtt.connected()) {
+    return;
+  }
+
+  String user=readConfigValue("brokeruser");
+  String pwd=readConfigValue("brokerpwd");
+  String staticBroker=readConfigValue("staticbrokeraddr");
+  int attempt=0;
+
+  String mqttBroker;
+  int mqttPort;
+  if(staticBroker=="") {
+    String clientInfo=String(sendConfigRequestandWaitForResponse("WHOISMQTTBROKER"));
+    Serial.print("Clientinfo from udp client service:");
+    Serial.println(clientInfo);
+    String udpTopic=split(clientInfo,';',0);
+    mqttBroker=split(clientInfo,';',1);
+    mqttPort=split(clientInfo,';',2).toInt();
+  } else {
+    Serial.println("use static mqtt broker address!");
+    mqttBroker=staticBroker;
+    mqttPort=readConfigValue("staticbrokerport").toInt();
+  }
+
+
+  Serial.print("MQTT Boker:");
+  Serial.println(mqttBroker);
+  Serial.print("MQTT Port:");
+  Serial.println(mqttPort);
+  mqtt=Adafruit_MQTT_Client(&espClient, mqttBroker.c_str(), mqttPort, user.c_str(), pwd.c_str());
+
+  // end dk9mbs
+  
+  Serial.print("Connecting to MQTT... ");
+
+  uint8_t retries = 3;
+  while ((ret = mqtt.connect()) != 0) { // connect will return 0 for connected
+       Serial.println(mqtt.connectErrorString(ret));
+       Serial.println("Retrying MQTT connection in 5 seconds...");
+       mqtt.disconnect();
+       delay(5000);  // wait 5 seconds
+       retries--;
+       if (retries == 0) {
+         // basically die and wait for WDT to reset me
+         while (1);
+       }
+  }
+  Serial.println("MQTT Connected!");
+}
 /*
 void reconnect(const char* clientName, PubSubClient client, boolean modeDeepSleep) {
   
@@ -185,6 +231,7 @@ void reconnect(const char* clientName, PubSubClient client, boolean modeDeepSlee
   
   while (!client.connected()) {
     //
+    
     String mqttBroker;
     int mqttPort;
     if(staticBroker=="") {
@@ -211,11 +258,13 @@ void reconnect(const char* clientName, PubSubClient client, boolean modeDeepSlee
     
     
     Serial.print("Attempting MQTT connection...");
-    if (client.connect(clientName, user.c_str(),pwd.c_str())) {
+    String clientId = "KI5HDH-";
+    clientId += String(random(0xffff), HEX);
+    if (client.connect(clientId.c_str(), user.c_str(),pwd.c_str())) {
       Serial.println("connected");
-      client.publish("outTopic", "hello world");
+      client.publish("ki5hdh/client", (char*)clientId.c_str());
       client.subscribe("event");
-      client.loop();
+      //client.loop();
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -422,14 +471,20 @@ void temp() {
     temperatureC = sensors.getTempCByIndex(x);
     Serial.print(address+": ");
     Serial.print(temperatureC);
-    Serial.println("ºC");
+    Serial.print("ºC : sending ... ");
 
     dtostrf(temperatureC,7, 3, temperaturenow);  //// convert float to char
     String payload = "{\"temp\":"+String(temperatureC)+", \"address\":\""+String(address)+"\"}";
     //client.publish("temp/sensor", (char*)payload.c_str());
-    makeRequest("/sensor/test", payload);
-    
-    //delay(500);
+    //makeRequest("/sensor/test", payload);
+
+    Adafruit_MQTT_Publish sensorTopic = Adafruit_MQTT_Publish(&mqtt, "temp/sensor");
+    if (! sensorTopic.publish(payload.c_str())) {
+      Serial.println(F("Failed"));
+    } else {
+      Serial.println(F("OK!"));
+    }
+
   }
 
 }
