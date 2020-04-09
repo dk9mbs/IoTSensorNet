@@ -8,6 +8,8 @@
  * Mac Address in setupFileSystem: : replace : with -
 */
 
+#include "dk9mbs_tools.h"
+
 
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
@@ -88,11 +90,7 @@ void setup() {
     unsigned int localPort=3333;
     udp.begin(localPort);
     delay(100);
-    
   } 
-
-
-
 }
 
 
@@ -100,12 +98,12 @@ void loop() {
   if(runSetup) {
     httpServer.handleClient(); 
   } else {
-    MQTT_connect();
+    mqttConnect(mqtt);
 
     long now = millis();
     if (now - loopDelay > modeSleepTimeSec*1000 || loopDelay==0) {
 
-        temp();
+        mainAction();
         loopDelay = now;
     }
 
@@ -119,49 +117,45 @@ void loop() {
   }
 }
 
-// ############# HTTP REQUEST ################ //
 
-String makeRequest(String path, String payload)
-{
-  // wait for WiFi connection
-  if ((WiFi.status() == WL_CONNECTED)) {
+void mainAction() {
+  Serial.println("reading the sensors...");
 
+  sensors.requestTemperatures();
+  delay(500);
+   
+  int numberOfSensors=sensors.getDS18Count();
+  float temperatureC;
+  DeviceAddress mac;
+  String address="";
+  char temperaturenow [15];
 
-    Serial.print("[HTTP] begin...\n");
-    http.begin(espClient, "http://dk0ay.dk9mbs.de/mqtt.php"); 
-    http.addHeader("Content-Type", "application/json");
+  for(int x=0;x<numberOfSensors;x++){
+    sensors.getAddress(mac, x);
+    address=deviceAddress2String(mac);
+    temperatureC = sensors.getTempCByIndex(x);
+    Serial.print(address+": ");
+    Serial.print(temperatureC);
+    Serial.print("ºC : sending ... ");
 
-    Serial.print("[HTTP] POST...\n");
-    //int httpCode = http.POST("{\"hello\":\"world\"}");
-    int httpCode = http.POST(payload);
-    
-    // httpCode will be negative on error
-    if (httpCode > 0) {
-      // HTTP header has been send and Server response header has been handled
-      Serial.printf("[HTTP] POST... code: %d\n", httpCode);
+    dtostrf(temperatureC,7, 3, temperaturenow);  //// convert float to char
+    String payload = "{\"temp\":"+String(temperatureC)+", \"address\":\""+String(address)+"\"}";
 
-      // file found at server
-      if (httpCode == HTTP_CODE_OK) {
-        const String& payload = http.getString();
-        Serial.println("received payload:\n<<");
-        Serial.println(payload);
-        Serial.println(">>");
-      }
+    Adafruit_MQTT_Publish sensorTopic = Adafruit_MQTT_Publish(&mqtt, "temp/sensor");
+    if (! sensorTopic.publish(payload.c_str())) {
+      Serial.println(F("Failed"));
     } else {
-      Serial.printf("[HTTP] POST... failed, error: %s\n", http.errorToString(httpCode).c_str());
+      Serial.println(F("OK!"));
     }
 
-    http.end();
   }
 
 }
 
-// ###################################### //
 
-void MQTT_connect() {
+void mqttConnect(Adafruit_MQTT_Client mqtt) {
   int8_t ret;
 
-  // Stop if already connected.
   if (mqtt.connected()) {
     return;
   }
@@ -193,8 +187,6 @@ void MQTT_connect() {
   Serial.println(mqttPort);
   mqtt=Adafruit_MQTT_Client(&espClient, mqttBroker.c_str(), mqttPort, user.c_str(), pwd.c_str());
 
-  // end dk9mbs
-  
   Serial.print("Connecting to MQTT... ");
 
   uint8_t retries = 3;
@@ -211,72 +203,6 @@ void MQTT_connect() {
   }
   Serial.println("MQTT Connected!");
 }
-/*
-void reconnect(const char* clientName, PubSubClient client, boolean modeDeepSleep) {
-  
-  if(client.connected()) return;
-  
-  Serial.print("Wifi status:");
-  Serial.println(WiFi.status());
-  
-  if(WiFi.status()!=WL_CONNECTED) {
-    Serial.println("Wifi not connected!");
-    setupWifiSTA(readConfigValue("ssid").c_str(), readConfigValue("password").c_str(), readConfigValue("mac").c_str(), modeDeepSleep);
-  }
-
-  String user=readConfigValue("brokeruser");
-  String pwd=readConfigValue("brokerpwd");
-  String staticBroker=readConfigValue("staticbrokeraddr");
-  int attempt=0;
-  
-  while (!client.connected()) {
-    //
-    
-    String mqttBroker;
-    int mqttPort;
-    if(staticBroker=="") {
-      String clientInfo=String(sendConfigRequestandWaitForResponse("WHOISMQTTBROKER"));
-      Serial.print("Clientinfo from udp client service:");
-      Serial.println(clientInfo);
-      String udpTopic=split(clientInfo,';',0);
-      mqttBroker=split(clientInfo,';',1);
-      mqttPort=split(clientInfo,';',2).toInt();
-    } else {
-      Serial.println("use static mqtt broker address!");
-      mqttBroker=staticBroker;
-      mqttPort=readConfigValue("staticbrokerport").toInt();
-    }
-
-  
-    Serial.print("MQTT Boker:");
-    Serial.println(mqttBroker);
-    Serial.print("MQTT Port:");
-    Serial.println(mqttPort);
-
-    client.setServer(mqttBroker.c_str(), mqttPort);
-    client.setCallback(callback);
-    
-    
-    Serial.print("Attempting MQTT connection...");
-    String clientId = "KI5HDH-";
-    clientId += String(random(0xffff), HEX);
-    if (client.connect(clientId.c_str(), user.c_str(),pwd.c_str())) {
-      Serial.println("connected");
-      client.publish("ki5hdh/client", (char*)clientId.c_str());
-      client.subscribe("event");
-      //client.loop();
-    } else {
-      Serial.print("failed, rc=");
-      Serial.print(client.state());
-      Serial.println(" try again in 5 seconds");
-      // Wait 5 seconds before retrying
-      delay(5000);
-      attempt++;
-      if(attempt==3) return;
-    }
-  }
-}
-*/
 
 // http server
 void setupHttpAdmin() {
@@ -348,19 +274,9 @@ void handleHttp404() {
     httpServer.send(404, "text/plain", "404: Not found"); 
 }
 
-// mqtt
-void callback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Message arrived [");
-  Serial.print(topic);
-  Serial.print("] ");
-  for (int i = 0; i < length; i++) {
-    Serial.print((char)payload[i]);
-  }
-  Serial.println();
-  
-}
-
 void setupIo() {
+  ESP.eraseConfig();
+  WiFi.setAutoConnect(false);
   pinMode(SETUPPIN,INPUT);
 }
 
@@ -408,15 +324,7 @@ void setupWifiSTA(const char* ssid, const char* password, const char* newMacStr,
   byte newMac[6];
   parseBytes(newMacStr, '-', newMac, 6, 16);
 
-  if(modeDeepSleep) {
-    ESP.eraseConfig();
-    //WiFi.setAutoConnect(true);
-    WiFi.setAutoReconnect(true);
-  } else {
-    ESP.eraseConfig();//ein
-    //WiFi.setAutoConnect(true);
-    WiFi.setAutoReconnect(true);
-  }
+  WiFi.setAutoReconnect(true);
   
   wifi_set_macaddr(0, const_cast<uint8*>(newMac));
   Serial.println("mac address is set");
@@ -448,80 +356,17 @@ void setupWifiSTA(const char* ssid, const char* password, const char* newMacStr,
   Serial.println(WiFi.subnetMask());
   Serial.print("Gateway:");
   Serial.println(WiFi.gatewayIP());
-  Serial.println("--- WiFi DIAG ---");
-  WiFi.printDiag(Serial);
+  //WiFi.printDiag(Serial);
 
 }
 
-void temp() {
-  Serial.println("reading the sensors...");
 
-  sensors.requestTemperatures();
-  delay(500);
-   
-  int numberOfSensors=sensors.getDS18Count();
-  float temperatureC;
-  DeviceAddress mac;
-  String address="";
-  char temperaturenow [15];
 
-  for(int x=0;x<numberOfSensors;x++){
-    sensors.getAddress(mac, x);
-    address=deviceAddress2String(mac);
-    temperatureC = sensors.getTempCByIndex(x);
-    Serial.print(address+": ");
-    Serial.print(temperatureC);
-    Serial.print("ºC : sending ... ");
 
-    dtostrf(temperatureC,7, 3, temperaturenow);  //// convert float to char
-    String payload = "{\"temp\":"+String(temperatureC)+", \"address\":\""+String(address)+"\"}";
-    //client.publish("temp/sensor", (char*)payload.c_str());
-    //makeRequest("/sensor/test", payload);
-
-    Adafruit_MQTT_Publish sensorTopic = Adafruit_MQTT_Publish(&mqtt, "temp/sensor");
-    if (! sensorTopic.publish(payload.c_str())) {
-      Serial.println(F("Failed"));
-    } else {
-      Serial.println(F("OK!"));
-    }
-
-  }
-
-}
-
-void saveConfigValue(String name, String value) {
-  File f =SPIFFS.open("/"+name+".cfg","w");
-  f.print(value.c_str());
-  f.close();
-  Serial.print("Saved config value:");
-  Serial.print(name+" -> ");
-  Serial.println(readConfigValue(name));
-}
-
-String readConfigValue(String name) {
-  String result="";
-  String fileName="/"+name+".cfg";
-  
-  if(SPIFFS.exists(fileName)) {
-    File f = SPIFFS.open(fileName, "r");
-    result=f.readString();
-    result.replace("\n", "");
-    result.replace("\r", "");
-    result.replace("\t", "");
-    f.close();
-  }
-
-  return result;
-}
-
-String getConfigFilename(String name) {
-  return "/"+name+".cfg";
-}
-
-void sendUdp(const char* msg, unsigned int port) {
+void sendUdp(const char* msg, unsigned int port,const char* broadcast, WiFiUDP udp) {
   Serial.print("Sending udp:");
   Serial.println(msg);
-  const char* broadcast=broadcastAddress;
+  //const char* broadcast=broadcastAddress;
   int beginResult;
   int endResult;
   beginResult=udp.beginPacket(broadcast, port);
@@ -534,38 +379,13 @@ void sendUdp(const char* msg, unsigned int port) {
 
 
 
-String deviceAddress2String(DeviceAddress deviceAddress){
-  String addr="";
-  for (uint8_t i = 0; i < 8; i++)
-  {
-    if(deviceAddress[i]<16) addr+="0";
-    addr+=String(deviceAddress[i],HEX);
-  }
-  addr.toUpperCase();
-  return addr;
-}
-
-
-void parseBytes(const char* str, char sep, byte* bytes, int maxBytes, int base) {
-    for (int i = 0; i < maxBytes; i++) {
-        bytes[i] = strtoul(str, NULL, base);  // Convert byte
-        str = strchr(str, sep);               // Find next separator
-        if (str == NULL || *str == '\0') {
-            break;                            // No more separators, exit
-        }
-        str++;                                // Point to next character after separator
-    }
-}
-
-
-
 String sendConfigRequestandWaitForResponse(String request) {
   int packetSize=0;
   unsigned int port=1200;
   int ttl=10;
   int timeout=ttl;
 
-  sendUdp(request.c_str(), port);
+  sendUdp(request.c_str(), port, broadcastAddress, udp);
 
   while(!packetSize) {
     packetSize = udp.parsePacket();
@@ -575,7 +395,7 @@ String sendConfigRequestandWaitForResponse(String request) {
     if (timeout==0) {
       Serial.println("timeout arrived ... try to send new request ...");
       timeout=ttl;
-      sendUdp(request.c_str(), port);
+      sendUdp(request.c_str(), port, broadcastAddress, udp);
     }
 
   }
@@ -584,21 +404,4 @@ String sendConfigRequestandWaitForResponse(String request) {
   packetBuffer[n] = 0;
   return String(packetBuffer);
 
-}
-
-
-String split(String s, char parser, int index) {
-  String rs="";
-  int parserIndex = index;
-  int parserCnt=0;
-  int rFromIndex=0, rToIndex=-1;
-  while (index >= parserCnt) {
-    rFromIndex = rToIndex+1;
-    rToIndex = s.indexOf(parser,rFromIndex);
-    if (index == parserCnt) {
-      if (rToIndex == 0 || rToIndex == -1) return "";
-      return s.substring(rFromIndex,rToIndex);
-    } else parserCnt++;
-  }
-  return rs;
 }
