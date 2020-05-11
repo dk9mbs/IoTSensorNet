@@ -1,3 +1,4 @@
+
 /*
  * 
  * https://arduino-esp8266.readthedocs.io/en/latest/esp8266wifi/station-class.html
@@ -9,8 +10,6 @@
 */
 
 #include "dk9mbs_tools.h"
-
-
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 #include <OneWire.h>
@@ -27,6 +26,7 @@
 #define TEST_DEEPSLEEP true
 #define ONEWIREBUSPIN 4
 #define SETUPPIN 5
+#define LIGHTNESS_IN_PIN A0
 
 OneWire  ds(2); 
 OneWire oneWire(ONEWIREBUSPIN);
@@ -103,7 +103,9 @@ void loop() {
     long now = millis();
     if (now - loopDelay > modeSleepTimeSec*1000 || loopDelay==0) {
 
-        mainAction();
+        readTemp();
+        readLightness();
+        
         loopDelay = now;
     }
 
@@ -117,19 +119,47 @@ void loop() {
   }
 }
 
+void readLightness() {
+  char topic[50];
+  strcpy(topic, readConfigValue("pubtopic").c_str());
+  Serial.print("Pubtopic: ");
+  Serial.println(topic);
+  Adafruit_MQTT_Publish sensorTopic = Adafruit_MQTT_Publish(&mqtt, topic);
 
-void mainAction() {
+  int sensorValue = analogRead(LIGHTNESS_IN_PIN);
+  float voltage= sensorValue * (1.0 / 1023.0);
+  Serial.print("Lightnessvalue:");
+  Serial.println(sensorValue);
+
+  String payload = "{\"value\":"+String(voltage)+", \"address\":\""+String("lightness")+"\"}";
+  sensorTopic.publish(payload.c_str());
+  
+}
+
+void readTemp() {
   Serial.println("reading the sensors...");
 
   sensors.requestTemperatures();
   delay(500);
    
-  int numberOfSensors=sensors.getDS18Count();
+  //int numberOfSensors=sensors.getDS18Count();
+  int numberOfSensors=sensors.getDeviceCount();
   float temperatureC;
   DeviceAddress mac;
   String address="";
   char temperaturenow [15];
 
+  
+  char topic[50];
+  strcpy(topic, readConfigValue("pubtopic").c_str());
+  Serial.print("Pubtopic: ");
+  Serial.println(topic);
+  Adafruit_MQTT_Publish systemTopic = Adafruit_MQTT_Publish(&mqtt, "dk9mbs/system");
+  //Adafruit_MQTT_Publish sensorTopic = Adafruit_MQTT_Publish(&mqtt, "temp/sensor");
+  Adafruit_MQTT_Publish sensorTopic = Adafruit_MQTT_Publish(&mqtt, topic);
+  String payload = "{\"hostname\":\""+readConfigValue("hostname")+"\", \"number_of_sensors\":\""+String(numberOfSensors)+"\"}";
+  systemTopic.publish (payload.c_str());
+  
   for(int x=0;x<numberOfSensors;x++){
     sensors.getAddress(mac, x);
     address=deviceAddress2String(mac);
@@ -139,9 +169,8 @@ void mainAction() {
     Serial.print("ºC : sending ... ");
 
     dtostrf(temperatureC,7, 3, temperaturenow);  //// convert float to char
-    String payload = "{\"temp\":"+String(temperatureC)+", \"address\":\""+String(address)+"\"}";
+    payload = "{\"temp\":"+String(temperatureC)+", \"address\":\""+String(address)+"\"}";
 
-    Adafruit_MQTT_Publish sensorTopic = Adafruit_MQTT_Publish(&mqtt, "temp/sensor");
     if (! sensorTopic.publish(payload.c_str())) {
       Serial.println(F("Failed"));
     } else {
@@ -236,6 +265,9 @@ void handleHttpRoot() {
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Password</div><INPUT style=\"width:99%;\" type=\"text\" name=\"PASSWORD\" value=\""+ readConfigValue("password") +"\"></div>"
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>MAC</div><INPUT style=\"width:99%;\" type=\"text\" name=\"MAC\" value=\""+ readConfigValue("mac") +"\"></div>"
     "</P>"
+    "<P>Network:"
+    "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Hostname</div><INPUT style=\"width:99%;\" type=\"text\" name=\"HOSTNAME\" value=\""+ readConfigValue("hostname") +"\"></div>"
+    "</P>"
     "<P>System:"
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Mode</div><INPUT style=\"width:99%;\" type=\"text\" name=\"MODE\" value=\""+ readConfigValue("mode") +"\"></div>"
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Sleeptime</div><INPUT style=\"width:99%;\" type=\"text\" name=\"SLEEPTIME\" value=\""+ readConfigValue("sleeptime") +"\"></div>"
@@ -249,6 +281,7 @@ void handleHttpRoot() {
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Static mqtt broker port</div><INPUT style=\"width:99%;\" type=\"text\" name=\"STATICBROKERPORT\" value=\""+ readConfigValue("staticbrokerport") +"\"></div>"
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Username</div><INPUT style=\"width:99%;\" type=\"text\" name=\"BROKERUSER\" value=\""+ readConfigValue("brokeruser") +"\"></div>"
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Password</div><INPUT style=\"width:99%;\" type=\"text\" name=\"BROKERPWD\" value=\""+ readConfigValue("brokerpwd") +"\"></div>"
+    "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Publishing (topic)</div><INPUT maxlength=\"50\" style=\"width:99%;\" type=\"text\" name=\"PUBTOPIC\" value=\""+ readConfigValue("pubtopic") +"\"></div>"
     "</P>"
     "<div><INPUT type=\"submit\" value=\"Send\"> <INPUT type=\"reset\"></div>"
     "</FORM>"
@@ -268,6 +301,8 @@ void handleSubmit() {
   saveConfigValue("staticbrokerport", httpServer.arg("STATICBROKERPORT"));
   saveConfigValue("brokeruser", httpServer.arg("BROKERUSER"));
   saveConfigValue("brokerpwd", httpServer.arg("BROKERPWD"));
+  saveConfigValue("hostname", httpServer.arg("HOSTNAME"));
+  saveConfigValue("pubtopic", httpServer.arg("PUBTOPIC"));
 }
 
 void handleHttp404() {
@@ -303,6 +338,8 @@ void setupFileSystem() {
 
   if(!SPIFFS.exists(getConfigFilename("brokeruser"))) saveConfigValue("brokeruser", "username");
   if(!SPIFFS.exists(getConfigFilename("brokerpwd"))) saveConfigValue("brokerpwd", "password");
+  if(!SPIFFS.exists(getConfigFilename("hostname"))) saveConfigValue("hostname", "node");
+  if(!SPIFFS.exists(getConfigFilename("pubtopic"))) saveConfigValue("pubtopic", "temp/sensor");
 
 }
 
@@ -329,6 +366,10 @@ void setupWifiSTA(const char* ssid, const char* password, const char* newMacStr,
   wifi_set_macaddr(0, const_cast<uint8*>(newMac));
   Serial.println("mac address is set");
 
+  wifi_station_set_hostname(readConfigValue("hostname").c_str());
+  Serial.print("Hostname ist set: ");
+  Serial.println(readConfigValue("hostname"));
+  
   delay(10);
   Serial.print("Connecting to ");
   Serial.println(ssid);
