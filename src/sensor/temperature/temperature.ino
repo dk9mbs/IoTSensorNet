@@ -18,6 +18,7 @@
 #include <DallasTemperature.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266HTTPClient.h>
+#include <LiquidCrystal.h>
 
 #include "Adafruit_MQTT.h"
 #include "Adafruit_MQTT_Client.h"
@@ -48,9 +49,13 @@ boolean modeDeepSleep=false;
 boolean runSetup=false;
 long loopDelay=0;
 
+//const uint8_t RS = D10, EN = D9, d4 = D4, d5 = D5, d6 = D6, d7 = D7;
+//LiquidCrystal lcd(RS, EN, d4, d5, d6, d7);
+
 HTTPClient http;
 
 void setup() { 
+  //setupLcd(lcd);
   Serial.begin(115200);
   setupIo();
   setupFileSystem();
@@ -93,6 +98,12 @@ void setup() {
   } 
 }
 
+void setupLcd(LiquidCrystal lcd){
+  lcd.begin(16, 2);
+  Serial.println("LCD");
+  delay(100);
+  lcd.print("hello, world!");
+}
 
 void loop() {
   if(runSetup) {
@@ -128,12 +139,16 @@ void readLightness() {
 
   int sensorValue = analogRead(LIGHTNESS_IN_PIN);
   float voltage= sensorValue * (1.0 / 1023.0);
+  float lux=voltage*1333;
   Serial.print("Lightnessvalue:");
-  Serial.println(sensorValue);
-
-  String payload = "{\"value\":"+String(voltage)+", \"address\":\""+String("lightness")+"\"}";
-  sensorTopic.publish(payload.c_str());
+  Serial.print(voltage);
+  Serial.println("mV");
   
+  String address=String(readConfigValue("mac")+".lightness");
+  address.replace("-","");
+  String payload = "{\"value\":"+String(lux)+", \"address\":\""+address+"\"}";
+  sensorTopic.publish(payload.c_str());
+ 
 }
 
 void readTemp() {
@@ -155,7 +170,6 @@ void readTemp() {
   Serial.print("Pubtopic: ");
   Serial.println(topic);
   Adafruit_MQTT_Publish systemTopic = Adafruit_MQTT_Publish(&mqtt, "dk9mbs/system");
-  //Adafruit_MQTT_Publish sensorTopic = Adafruit_MQTT_Publish(&mqtt, "temp/sensor");
   Adafruit_MQTT_Publish sensorTopic = Adafruit_MQTT_Publish(&mqtt, topic);
   String payload = "{\"hostname\":\""+readConfigValue("hostname")+"\", \"number_of_sensors\":\""+String(numberOfSensors)+"\"}";
   systemTopic.publish (payload.c_str());
