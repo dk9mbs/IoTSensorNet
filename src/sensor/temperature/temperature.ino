@@ -9,6 +9,16 @@
  * Mac Address in setupFileSystem: : replace : with -
 */
 
+#define ENABLE_ONEWIRE true
+#define ENABLE_DHT true
+#define ENABLE_LIGHTNESS true
+#define ENABLE_RAIN false
+
+#ifdef ESP32
+#pragma message(THIS EXAMPLE IS FOR ESP8266 ONLY!)
+#error Select ESP8266 board.
+#endif
+
 #include "dk9mbs_tools.h"
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
@@ -28,15 +38,29 @@
 #define ONEWIREBUSPIN 4
 #define SETUPPIN 5
 #define LIGHTNESS_IN_PIN A0
+#define DHT_PIN 14
+#define DHT_TYPE DHT11
+#define MQTT_PUB_TOPIC "temp/sensor"
+#define PRE_TASK_MSSEC 5000
+#define POST_TASK_MSSEC 500
 
+#if ENABLE_ONEWIRE
 OneWire  ds(2); 
 OneWire oneWire(ONEWIREBUSPIN);
 DallasTemperature sensors(&oneWire);
+#endif
+
 WiFiUDP udp;
 WiFiClient espClient;
 ESP8266WebServer httpServer(80);
 
 Adafruit_MQTT_Client mqtt(&espClient, "", 1883, "", "");
+Adafruit_MQTT_Publish sensorTopic = Adafruit_MQTT_Publish(&mqtt, MQTT_PUB_TOPIC, MQTT_QOS_0);
+
+#if ENABLE_DHT
+#include "DHT.h"
+DHT dht (DHT_PIN, DHT_TYPE);
+#endif
 
 
 const char* broadcastAddress="192.168.2.255";
@@ -49,28 +73,28 @@ boolean modeDeepSleep=false;
 boolean runSetup=false;
 long loopDelay=0;
 
-//const uint8_t RS = D10, EN = D9, d4 = D4, d5 = D5, d6 = D6, d7 = D7;
-//LiquidCrystal lcd(RS, EN, d4, d5, d6, d7);
+int state=0; // Status from Statemachine
 
 HTTPClient http;
 
 void setup() { 
-  //setupLcd(lcd);
   Serial.begin(115200);
   setupIo();
   setupFileSystem();
 
+
   if(digitalRead(SETUPPIN)==0) runSetup=true;
-
-
   
   Serial.print("Setup:");
   Serial.println(digitalRead(SETUPPIN));
+  Serial.print("adminpwd: ");
+  Serial.println(readConfigValue("adminpwd"));
   
   if(runSetup) {
     setupWifiAP();
     setupHttpAdmin();
   } else {
+    setupHttpAdmin();
     String mode=readConfigValue("mode");
     mode.toUpperCase();
     if(mode=="DEEPSLEEP") {
@@ -89,7 +113,14 @@ void setup() {
     }
 
     setupWifiSTA(readConfigValue("ssid").c_str(), readConfigValue("password").c_str(), readConfigValue("mac").c_str(), modeDeepSleep);
+    
+#if ENABLE_ONEWIRE    
     sensors.begin();
+#endif
+
+#if ENABLE_DHT
+  dht.begin(); 
+#endif
   
     delay(500);
     unsigned int localPort=3333;
@@ -98,64 +129,148 @@ void setup() {
   } 
 }
 
-void setupLcd(LiquidCrystal lcd){
-  lcd.begin(16, 2);
-  Serial.println("LCD");
-  delay(100);
-  lcd.print("hello, world!");
+void publishMqttSensorPayload(String address, float value) {
+  //strcpy(topic, readConfigValue("pubtopic").c_str());
+  //Serial.print("Pubtopic: ");
+  //Serial.println(topic);
+  //Adafruit_MQTT_Publish sensorTopic = Adafruit_MQTT_Publish(&mqtt, topic);
+
+  String payload="";
+  payload = "{\"value\":"+String(value)+", \"address\":\""+address+"\"}";
+  sensorTopic.publish(payload.c_str());
 }
 
 void loop() {
-  if(runSetup) {
-    httpServer.handleClient(); 
-  } else {
-    mqttConnect(mqtt);
+  httpServer.handleClient(); 
 
+    mqttConnect();
+
+    // Statemachine
     long now = millis();
-    if (now - loopDelay > modeSleepTimeSec*1000 || loopDelay==0) {
 
-        readTemp();
-        readLightness();
-        
-        loopDelay = now;
+    // Pre Process Tasks
+    if(  (now - loopDelay > (modeSleepTimeSec*1000)-PRE_TASK_MSSEC  || loopDelay==0) && state==0  ) {
+      Serial.println ("Executing pre tasks...");
+
+#if ENABLE_ONEWIRE  
+      sensors.requestTemperatures();
+#endif
+      state=1;
+    }
+
+    
+    // Prcess Tasks
+    if (  (now - loopDelay > modeSleepTimeSec*1000 || loopDelay==0) && state==1   ) {
+      Serial.println ("Executing tasks...");
+      String address;
+      float value;
+  
+
+#if ENABLE_ONEWIRE
+      readOneWireTempMultible();
+#endif
+
+#if ENABLE_DHT
+      String addressHum;
+      String addressTemp;
+      float valueHum;
+      float valueTemp;
+      
+      mqtt.disconnect();
+      readDhtHum(addressHum, valueHum);
+      readDhtTemp(addressTemp, valueTemp);
+      mqttConnect();
+
+      publishMqttSensorPayload(addressHum, valueHum);
+      publishMqttSensorPayload(addressTemp, valueTemp);
+#endif
+
+#if ENABLE_LIGHTNESS
+      readLightness(address, value);
+      publishMqttSensorPayload(address, value);
+#endif
+
+#if ENABLE_RAIN
+
+#endif
+      state=2;
     }
 
 
+    // Postprocess
+    if(  (now - loopDelay > (modeSleepTimeSec*1000)+POST_TASK_MSSEC  || loopDelay==0) && state==2  ) {
+      Serial.println ("Executing post tasks...");
+      loopDelay = now;
+      state=0;
+    }
+    //
+    // End Statemachine
+    //
     if(modeDeepSleep) {
       Serial.println("good night...");
       WiFi.disconnect();
       ESP.deepSleep(modeSleepTimeSec*1000000);
       delay(2000);
     }
-  }
+} // function
+
+String createIoTDeviceAddress(String postfix) {
+  String address=String(readConfigValue("mac")+"."+postfix);
+  address.replace("-","");
+  return address;  
 }
 
-void readLightness() {
-  char topic[50];
-  strcpy(topic, readConfigValue("pubtopic").c_str());
-  Serial.print("Pubtopic: ");
-  Serial.println(topic);
-  Adafruit_MQTT_Publish sensorTopic = Adafruit_MQTT_Publish(&mqtt, topic);
 
+#if ENABLE_DHT
+void readDhtHum(String& address, float& humidity) {
+  Serial.println("reading the DHT sensor");
+  address=createIoTDeviceAddress("hum");
+  humidity = dht.readHumidity();
+  /*
+  Serial.print(dht.getStatusString());
+  Serial.print(humidity, 1);
+  Serial.print(temperature, 1);
+  Serial.print(dht.computeHeatIndex(temperature, humidity, false), 1);
+  Serial.println(dht.computeHeatIndex(dht.toFahrenheit(temperature), humidity, true), 1);
+  */
+  Serial.print("Humidity:");
+  Serial.print(humidity);
+  Serial.println("%");
+
+}
+
+void readDhtTemp(String& address, float& temperature) {
+  Serial.println("reading the DHT sensor");
+  address=createIoTDeviceAddress("tempc");
+  temperature = dht.readTemperature();
+
+  Serial.print("Temperature:");
+  Serial.print(temperature);
+  Serial.println("°C");
+  
+}
+
+#endif
+
+#if ENABLE_LIGHTNESS
+void readLightness(String& address, float& lux) {
+  Serial.println("reading the lightness sensor");
+  address=createIoTDeviceAddress("lightness");
   int sensorValue = analogRead(LIGHTNESS_IN_PIN);
   float voltage= sensorValue * (1.0 / 1023.0);
-  float lux=voltage*1333;
+  lux=voltage*1333;
   Serial.print("Lightnessvalue:");
   Serial.print(voltage);
-  Serial.println("mV");
-  
-  String address=String(readConfigValue("mac")+".lightness");
-  address.replace("-","");
-  String payload = "{\"value\":"+String(lux)+", \"address\":\""+address+"\"}";
-  sensorTopic.publish(payload.c_str());
- 
+  Serial.println("mV");  
 }
+#endif
 
-void readTemp() {
-  Serial.println("reading the sensors...");
+#if ENABLE_ONEWIRE
+void readOneWireTempMultible() {
+  Serial.println("reading the onewire sensors...");
 
-  sensors.requestTemperatures();
-  delay(500);
+  //sensors.requestTemperatures();
+  //delay(500);
    
   //int numberOfSensors=sensors.getDS18Count();
   int numberOfSensors=sensors.getDeviceCount();
@@ -163,16 +278,6 @@ void readTemp() {
   DeviceAddress mac;
   String address="";
   char temperaturenow [15];
-
-  
-  char topic[50];
-  strcpy(topic, readConfigValue("pubtopic").c_str());
-  Serial.print("Pubtopic: ");
-  Serial.println(topic);
-  Adafruit_MQTT_Publish systemTopic = Adafruit_MQTT_Publish(&mqtt, "dk9mbs/system");
-  Adafruit_MQTT_Publish sensorTopic = Adafruit_MQTT_Publish(&mqtt, topic);
-  String payload = "{\"hostname\":\""+readConfigValue("hostname")+"\", \"number_of_sensors\":\""+String(numberOfSensors)+"\"}";
-  systemTopic.publish (payload.c_str());
   
   for(int x=0;x<numberOfSensors;x++){
     sensors.getAddress(mac, x);
@@ -183,6 +288,9 @@ void readTemp() {
     Serial.print("ºC : sending ... ");
 
     dtostrf(temperatureC,7, 3, temperaturenow);  //// convert float to char
+
+    publishMqttSensorPayload(address,temperatureC); 
+    /*
     payload = "{\"temp\":"+String(temperatureC)+", \"address\":\""+String(address)+"\"}";
 
     if (! sensorTopic.publish(payload.c_str())) {
@@ -190,13 +298,12 @@ void readTemp() {
     } else {
       Serial.println(F("OK!"));
     }
-
+    */
   }
-
 }
+#endif
 
-
-void mqttConnect(Adafruit_MQTT_Client mqtt) {
+void mqttConnect() {
   int8_t ret;
 
   if (mqtt.connected()) {
@@ -210,6 +317,8 @@ void mqttConnect(Adafruit_MQTT_Client mqtt) {
 
   String mqttBroker;
   int mqttPort;
+  String clientId=readConfigValue("hostname");
+  
   if(staticBroker=="") {
     String clientInfo=String(sendConfigRequestandWaitForResponse("WHOISMQTTBROKER"));
     Serial.print("Clientinfo from udp client service:");
@@ -228,7 +337,10 @@ void mqttConnect(Adafruit_MQTT_Client mqtt) {
   Serial.println(mqttBroker);
   Serial.print("MQTT Port:");
   Serial.println(mqttPort);
-  mqtt=Adafruit_MQTT_Client(&espClient, mqttBroker.c_str(), mqttPort, user.c_str(), pwd.c_str());
+  Serial.print("MQTT ClientID:");
+  Serial.println(clientId);
+  
+  mqtt=Adafruit_MQTT_Client(&espClient, mqttBroker.c_str(), mqttPort,clientId.c_str(), user.c_str(), pwd.c_str());
 
   Serial.print("Connecting to MQTT... ");
 
@@ -249,17 +361,35 @@ void mqttConnect(Adafruit_MQTT_Client mqtt) {
 
 // http server
 void setupHttpAdmin() {
-  httpServer.on("/",handleHttpRoot);
+  httpServer.on("/",handleHttpSetup);
+  httpServer.on("/api",handleHttpApi);
   httpServer.onNotFound(handleHttp404);
   httpServer.begin();
 }
 
-void handleHttpRoot() {
+void handleHttpApi() {
+  httpServer.send(200, "text/html", "api"); 
+}
+void handleHttpSetup() {
+    String pwd = readConfigValue("adminpwd");
+    if (!httpServer.authenticate("admin", pwd.c_str())) {
+      return httpServer.requestAuthentication();
+    }
+      
     if(httpServer.hasArg("CMD")) {
       Serial.println(httpServer.arg("CMD"));
       handleSubmit();
     }
-    
+
+    if(httpServer.hasArg("FORMATFS")) {
+      Serial.println("Format FS");
+      handleFormat();
+    }
+    if(httpServer.hasArg("RESET")) {
+      Serial.println("Reset ...");
+      handleReset();
+    }
+
     String html =
     "<!DOCTYPE HTML>"
     "<html>"
@@ -277,14 +407,14 @@ void handleHttpRoot() {
     "<INPUT type=\"hidden\" name=\"CMD\" value=\"SAVE\"><BR>"
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>ssid</div><INPUT style=\"width:99%;\" type=\"text\" name=\"SSID\" value=\""+ readConfigValue("ssid") +"\"></div>"
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Password</div><INPUT style=\"width:99%;\" type=\"text\" name=\"PASSWORD\" value=\""+ readConfigValue("password") +"\"></div>"
-    "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>MAC</div><INPUT style=\"width:99%;\" type=\"text\" name=\"MAC\" value=\""+ readConfigValue("mac") +"\"></div>"
+    "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>MAC (A4-CF-12-DF-69-00)</div><INPUT style=\"width:99%;\" type=\"text\" name=\"MAC\" value=\""+ readConfigValue("mac") +"\"></div>"
     "</P>"
     "<P>Network:"
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Hostname</div><INPUT style=\"width:99%;\" type=\"text\" name=\"HOSTNAME\" value=\""+ readConfigValue("hostname") +"\"></div>"
     "</P>"
     "<P>System:"
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Mode</div><INPUT style=\"width:99%;\" type=\"text\" name=\"MODE\" value=\""+ readConfigValue("mode") +"\"></div>"
-    "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Sleeptime</div><INPUT style=\"width:99%;\" type=\"text\" name=\"SLEEPTIME\" value=\""+ readConfigValue("sleeptime") +"\"></div>"
+    "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Sleeptime (sec)</div><INPUT style=\"width:99%;\" type=\"text\" name=\"SLEEPTIME\" value=\""+ readConfigValue("sleeptime") +"\"></div>"
     "</P>"
     "<P>Admin portal"
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Admin Password</div><INPUT style=\"width:99%;\" type=\"text\" name=\"ADMINPWD\" value=\""+ readConfigValue("adminpwd") +"\"></div>"
@@ -295,9 +425,13 @@ void handleHttpRoot() {
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Static mqtt broker port</div><INPUT style=\"width:99%;\" type=\"text\" name=\"STATICBROKERPORT\" value=\""+ readConfigValue("staticbrokerport") +"\"></div>"
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Username</div><INPUT style=\"width:99%;\" type=\"text\" name=\"BROKERUSER\" value=\""+ readConfigValue("brokeruser") +"\"></div>"
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Password</div><INPUT style=\"width:99%;\" type=\"text\" name=\"BROKERPWD\" value=\""+ readConfigValue("brokerpwd") +"\"></div>"
-    "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Publishing (topic)</div><INPUT maxlength=\"50\" style=\"width:99%;\" type=\"text\" name=\"PUBTOPIC\" value=\""+ readConfigValue("pubtopic") +"\"></div>"
+    "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Publish topic</div><INPUT disabled maxlength=\"50\" style=\"width:99%;\" type=\"text\" name=\"PUBTOPIC\" value=\""+ MQTT_PUB_TOPIC +"\"></div>"
     "</P>"
-    "<div><INPUT type=\"submit\" value=\"Send\"> <INPUT type=\"reset\"></div>"
+    "<div>"
+    "<INPUT type=\"submit\" value=\"Save\">"
+    "<INPUT type=\"submit\" name=\"RESET\" value=\"Save and Reset\">"
+    "<INPUT type=\"submit\" name=\"FORMATFS\" value=\"!!! Format fs !!!\">"
+    "</div>"
     "</FORM>"
     "</body>"
     "</html>";
@@ -319,8 +453,20 @@ void handleSubmit() {
   saveConfigValue("pubtopic", httpServer.arg("PUBTOPIC"));
 }
 
+void handleReset() {
+  httpServer.send(200, "text/plain", "restart ..."); 
+  ESP.restart();
+}
+
+void handleFormat() {
+  Serial.print("Format fs ... ");
+  SPIFFS.format();
+  setupFileSystem();
+  Serial.println("ready");
+}
+
 void handleHttp404() {
-    httpServer.send(404, "text/plain", "404: Not found"); 
+  httpServer.send(404, "text/plain", "404: Not found"); 
 }
 
 void setupIo() {
@@ -354,12 +500,17 @@ void setupFileSystem() {
   if(!SPIFFS.exists(getConfigFilename("brokerpwd"))) saveConfigValue("brokerpwd", "password");
   if(!SPIFFS.exists(getConfigFilename("hostname"))) saveConfigValue("hostname", "node");
   if(!SPIFFS.exists(getConfigFilename("pubtopic"))) saveConfigValue("pubtopic", "temp/sensor");
-
 }
 
 void setupWifiAP(){
   Serial.println("Setup shell is starting ...");
   String pwd=readConfigValue("adminpwd");
+
+  if(pwd==""){
+    Serial.println("Use default password!");
+    pwd="0000";
+  }
+  
   Serial.print("Password for AP:");
   Serial.println(pwd);
   
@@ -376,10 +527,12 @@ void setupWifiSTA(const char* ssid, const char* password, const char* newMacStr,
   parseBytes(newMacStr, '-', newMac, 6, 16);
 
   WiFi.setAutoReconnect(true);
-  
-  wifi_set_macaddr(0, const_cast<uint8*>(newMac));
-  Serial.println("mac address is set");
 
+  if(newMacStr != "") {
+    wifi_set_macaddr(0, const_cast<uint8*>(newMac));
+    Serial.println("mac address is set");
+  }
+  
   wifi_station_set_hostname(readConfigValue("hostname").c_str());
   Serial.print("Hostname ist set: ");
   Serial.println(readConfigValue("hostname"));
