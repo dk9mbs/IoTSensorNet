@@ -5,6 +5,9 @@
  * https://gist.github.com/bbx10/5a2885a700f30af75fc5
  * https://github.com/esp8266/Arduino/blob/4897e0006b5b0123a2fa31f67b14a3fff65ce561/libraries/ESP8266WiFi/src/include/wl_definitions.h
  * https://github.com/adafruit/Adafruit_MQTT_Library/blob/master/examples/mqtt_esp8266/mqtt_esp8266.ino
+ * 
+ * https://github.com/lucasmaziero/LiquidCrystal_I2C
+ * 
  * ToDo:
  * Mac Address in setupFileSystem: : replace : with -
 */
@@ -12,7 +15,8 @@
 #define ENABLE_ONEWIRE true
 #define ENABLE_DHT true
 #define ENABLE_LIGHTNESS true
-#define ENABLE_RAIN false
+#define ENABLE_RAINFALL false
+#define ENABLE_DISPLAY true
 
 #ifdef ESP32
 #pragma message(THIS EXAMPLE IS FOR ESP8266 ONLY!)
@@ -22,32 +26,48 @@
 #include "dk9mbs_tools.h"
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
-#include <OneWire.h>
 #include <FS.h>
+
+#if ENABLE_ONEWIRE
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#endif
+
 #include <ESP8266WebServer.h>
 #include <ESP8266HTTPClient.h>
-#include <LiquidCrystal.h>
+
+#if ENABLE_DISPLAY
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#endif
 
 #include "Adafruit_MQTT.h"
 #include "Adafruit_MQTT_Client.h"
 
 
 #define TEST_DEEPSLEEP true
+
 #define ONEWIREBUSPIN 4
-#define SETUPPIN 5
+#define SETUPPIN 0 //default 5
 #define LIGHTNESS_IN_PIN A0
 #define DHT_PIN 14
+#define RAINFALL_PIN 13
 #define DHT_TYPE DHT11
 #define MQTT_PUB_TOPIC "temp/sensor"
 #define PRE_TASK_MSSEC 5000
 #define POST_TASK_MSSEC 500
+#define DEBOUNCE_TIME_MS 20 // Entprellzeit digital in
+#define SCL 0 
+#define SDA 2 
 
 #if ENABLE_ONEWIRE
 OneWire  ds(2); 
 OneWire oneWire(ONEWIREBUSPIN);
 DallasTemperature sensors(&oneWire);
+#endif
+
+#if ENABLE_DISPLAY
+LiquidCrystal_I2C lcd(0x27, 16, 2);
 #endif
 
 WiFiUDP udp;
@@ -56,12 +76,18 @@ ESP8266WebServer httpServer(80);
 
 Adafruit_MQTT_Client mqtt(&espClient, "", 1883, "", "");
 Adafruit_MQTT_Publish sensorTopic = Adafruit_MQTT_Publish(&mqtt, MQTT_PUB_TOPIC, MQTT_QOS_0);
+//Adafruit_MQTT_Subscribe displayChanel = Adafruit_MQTT_Subscribe(&mqtt, "node/test", MQTT_QOS_0);
 
 #if ENABLE_DHT
 #include "DHT.h"
 DHT dht (DHT_PIN, DHT_TYPE);
 #endif
 
+#if ENABLE_RAINFALL
+//Niederschlag mit Wippe gezaehlt
+int rainfallCount=0;
+int lastrainfallSignal=0; 
+#endif
 
 const char* broadcastAddress="192.168.2.255";
 long lastMsg = 0;
@@ -79,6 +105,16 @@ HTTPClient http;
 
 void setup() { 
   Serial.begin(115200);
+
+#if ENABLE_DISPLAY
+
+  //Wire.begin(SDA, SCL); 
+  lcd.begin(SDA, SCL);
+  lcd.setCursor(0, 0); // Spalte, Zeile
+  printLcd(lcd, 0,1, "booting ...",1);
+  delay (1000);
+#endif
+
   setupIo();
   setupFileSystem();
 
@@ -94,6 +130,10 @@ void setup() {
     setupWifiAP();
     setupHttpAdmin();
   } else {
+#if ENABLE_DISPLAY
+  printLcd(lcd, 0,1, "setup hw ...",1);
+#endif
+    
     setupHttpAdmin();
     String mode=readConfigValue("mode");
     mode.toUpperCase();
@@ -119,32 +159,28 @@ void setup() {
 #endif
 
 #if ENABLE_DHT
-  dht.begin(); 
+    dht.begin(); 
 #endif
-  
+
+#if ENABLE_RAINFALL
+    attachInterrupt(digitalPinToInterrupt(RAINFALL_PIN), rainfallIsr, FALLING);
+#endif
+
     delay(500);
     unsigned int localPort=3333;
     udp.begin(localPort);
     delay(100);
-  } 
-}
 
-void publishMqttSensorPayload(String address, float value) {
-  //strcpy(topic, readConfigValue("pubtopic").c_str());
-  //Serial.print("Pubtopic: ");
-  //Serial.println(topic);
-  //Adafruit_MQTT_Publish sensorTopic = Adafruit_MQTT_Publish(&mqtt, topic);
-
-  String payload="";
-  payload = "{\"value\":"+String(value)+", \"address\":\""+address+"\"}";
-  sensorTopic.publish(payload.c_str());
+    //displayChanel.setCallback(mqttDisplayCallback);
+    //mqtt.subscribe(&displayChanel);
+  } // setup 
 }
 
 void loop() {
-  httpServer.handleClient(); 
+    httpServer.handleClient(); 
 
     mqttConnect();
-
+    //mqtt.processPackets(10000);
     // Statemachine
     long now = millis();
 
@@ -177,24 +213,32 @@ void loop() {
       float valueTemp;
       
       mqtt.disconnect();
-      readDhtHum(addressHum, valueHum);
-      readDhtTemp(addressTemp, valueTemp);
+      readDhtHum(dht, addressHum, valueHum);
+      readDhtTemp(dht,addressTemp, valueTemp);
       mqttConnect();
+  
+      publishMqttSensorPayload(sensorTopic, addressHum, valueHum);
+      publishMqttSensorPayload(sensorTopic, addressTemp, valueTemp);
 
-      publishMqttSensorPayload(addressHum, valueHum);
-      publishMqttSensorPayload(addressTemp, valueTemp);
+#if ENABLE_DISPLAY
+      printLcd(lcd, 0,0, "T:"+String(valueTemp)+"C H:"+String(valueHum)+"%", 1);
+      printLcd(lcd, 0,1, "L:"+String(100)+"Lux", 0);
+#endif
+
 #endif
 
 #if ENABLE_LIGHTNESS
       readLightness(address, value);
-      publishMqttSensorPayload(address, value);
+      publishMqttSensorPayload(sensorTopic, address, value);
 #endif
 
-#if ENABLE_RAIN
-
+#if ENABLE_RAINFALL
+      readRainfall(address, value);
+      publishMqttSensorPayload(sensorTopic, address, value);
 #endif
+
       state=2;
-    }
+    } // Process Task
 
 
     // Postprocess
@@ -206,6 +250,7 @@ void loop() {
     //
     // End Statemachine
     //
+    
     if(modeDeepSleep) {
       Serial.println("good night...");
       WiFi.disconnect();
@@ -213,6 +258,51 @@ void loop() {
       delay(2000);
     }
 } // function
+
+
+void mqttDisplayCallback(char *data, uint16_t len) {
+  Serial.print("Hey we're in a onoff callback, the button value is: ");
+  Serial.println(data);
+}
+
+
+#if ENABLE_DISPLAY
+void printLcd(LiquidCrystal_I2C& lcdDisplay,int column, int row, String text, int clear) {
+  if(clear==1) lcdDisplay.clear();
+  
+  lcdDisplay.setCursor(column, row); // Spalte, Zeile
+  lcdDisplay.print(text);
+}
+#endif
+
+#if ENABLE_RAINFALL
+void rainfallIsr() {
+  int now=millis();
+  if(now-lastrainfallSignal < DEBOUNCE_TIME_MS) return;
+  
+  rainfallCount++;
+  lastrainfallSignal=millis();
+}
+
+void readRainfall(String& address, float& value) {
+  Serial.println("reading the Rainfall sensor");
+  address=createIoTDeviceAddress("rainfall");
+  value=rainfallCount;
+
+}
+#endif
+
+void publishMqttSensorPayload(Adafruit_MQTT_Publish& topic, String address, float value) {
+  //strcpy(topic, readConfigValue("pubtopic").c_str());
+  //Serial.print("Pubtopic: ");
+  //Serial.println(topic);
+  //Adafruit_MQTT_Publish sensorTopic = Adafruit_MQTT_Publish(&mqtt, topic);
+
+  String payload="";
+  payload = "{\"value\":"+String(value)+", \"address\":\""+address+"\"}";
+  //sensorTopic.publish(payload.c_str());
+  topic.publish(payload.c_str());
+}
 
 String createIoTDeviceAddress(String postfix) {
   String address=String(readConfigValue("mac")+"."+postfix);
@@ -222,7 +312,7 @@ String createIoTDeviceAddress(String postfix) {
 
 
 #if ENABLE_DHT
-void readDhtHum(String& address, float& humidity) {
+void readDhtHum(DHT& dht, String& address, float& humidity) {
   Serial.println("reading the DHT sensor");
   address=createIoTDeviceAddress("hum");
   humidity = dht.readHumidity();
@@ -239,7 +329,7 @@ void readDhtHum(String& address, float& humidity) {
 
 }
 
-void readDhtTemp(String& address, float& temperature) {
+void readDhtTemp(DHT& dht, String& address, float& temperature) {
   Serial.println("reading the DHT sensor");
   address=createIoTDeviceAddress("tempc");
   temperature = dht.readTemperature();
@@ -289,7 +379,7 @@ void readOneWireTempMultible() {
 
     dtostrf(temperatureC,7, 3, temperaturenow);  //// convert float to char
 
-    publishMqttSensorPayload(address,temperatureC); 
+    publishMqttSensorPayload(sensorTopic, address,temperatureC); 
     /*
     payload = "{\"temp\":"+String(temperatureC)+", \"address\":\""+String(address)+"\"}";
 
