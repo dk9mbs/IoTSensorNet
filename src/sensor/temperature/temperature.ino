@@ -45,20 +45,19 @@
 #include "Adafruit_MQTT_Client.h"
 
 
-#define TEST_DEEPSLEEP true
-
 #define ONEWIREBUSPIN 4
-#define SETUPPIN 0 //default 5
+#define SETUPPIN 5 
 #define LIGHTNESS_IN_PIN A0
 #define DHT_PIN 14
 #define RAINFALL_PIN 13
+#define DISPLAY_SCL 0 
+#define DISPLAY_SDA 2 
+
 #define DHT_TYPE DHT11
 #define MQTT_PUB_TOPIC "temp/sensor"
 #define PRE_TASK_MSSEC 5000
 #define POST_TASK_MSSEC 500
 #define DEBOUNCE_TIME_MS 20 // Entprellzeit digital in
-#define SCL 0 
-#define SDA 2 
 
 #if ENABLE_ONEWIRE
 OneWire  ds(2); 
@@ -107,9 +106,7 @@ void setup() {
   Serial.begin(115200);
 
 #if ENABLE_DISPLAY
-
-  //Wire.begin(SDA, SCL); 
-  lcd.begin(SDA, SCL);
+  lcd.begin(DISPLAY_SDA, DISPLAY_SCL);
   lcd.setCursor(0, 0); // Spalte, Zeile
   printLcd(lcd, 0,1, "booting ...",1);
   delay (1000);
@@ -127,11 +124,14 @@ void setup() {
   Serial.println(readConfigValue("adminpwd"));
   
   if(runSetup) {
+#if ENABLE_DISPLAY
+    printLcd(lcd, 0,1, "enter setup ...",1);
+#endif
     setupWifiAP();
     setupHttpAdmin();
   } else {
 #if ENABLE_DISPLAY
-  printLcd(lcd, 0,1, "setup hw ...",1);
+    printLcd(lcd, 0,1, "setup hw ...",1);
 #endif
     
     setupHttpAdmin();
