@@ -283,8 +283,8 @@ ICACHE_RAM_ATTR void rainfallIsr() {
   rainfallCount++;
   lastrainfallSignal=millis();
 
-  Serial.print("Rain:");
-  Serial.println(rainfallCount);
+  //Serial.print("Rain:");
+  //Serial.println(rainfallCount);
 }
 
 void readRainfall(String& address, float& value) {
