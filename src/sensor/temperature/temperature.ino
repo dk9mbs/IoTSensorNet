@@ -15,7 +15,7 @@
 #define ENABLE_ONEWIRE true
 #define ENABLE_DHT true
 #define ENABLE_LIGHTNESS true
-#define ENABLE_RAINFALL false
+#define ENABLE_RAINFALL true
 #define ENABLE_DISPLAY true
 
 #ifdef ESP32
@@ -57,7 +57,7 @@
 #define MQTT_PUB_TOPIC "temp/sensor"
 #define PRE_TASK_MSSEC 5000
 #define POST_TASK_MSSEC 500
-#define DEBOUNCE_TIME_MS 20 // Entprellzeit digital in
+#define DEBOUNCE_TIME_MS 100 // Entprellzeit digital in
 
 #if ENABLE_ONEWIRE
 OneWire  ds(2); 
@@ -163,7 +163,7 @@ void setup() {
 #endif
 
 #if ENABLE_RAINFALL
-    attachInterrupt(digitalPinToInterrupt(RAINFALL_PIN), rainfallIsr, FALLING);
+    attachInterrupt(digitalPinToInterrupt(RAINFALL_PIN), rainfallIsr, RISING);
 #endif
 
     delay(500);
@@ -276,12 +276,15 @@ void printLcd(LiquidCrystal_I2C& lcdDisplay,int column, int row, String text, in
 #endif
 
 #if ENABLE_RAINFALL
-void rainfallIsr() {
+ICACHE_RAM_ATTR void rainfallIsr() {
   int now=millis();
   if(now-lastrainfallSignal < DEBOUNCE_TIME_MS) return;
   
   rainfallCount++;
   lastrainfallSignal=millis();
+
+  Serial.print("Rain:");
+  Serial.println(rainfallCount);
 }
 
 void readRainfall(String& address, float& value) {
