@@ -1,2 +1,3 @@
 src/sensor/temperature/data/*.cfg
 src/sensor/repeater/data/*.cfg
+*/*.FCStd1
