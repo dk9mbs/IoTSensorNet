@@ -7,10 +7,11 @@ from clientlib import RestApiClient
 mqtt_username=sys.argv[1]
 mqtt_password=sys.argv[2]
 mqtt_broker=sys.argv[3]
-rest_username=sys.argv[4]
-rest_password=sys.argv[5]
+rest_url=sys.argv[4]
+rest_username=sys.argv[5]
+rest_password=sys.argv[6]
 
-rest=RestApiClient("http://localhost:5000/api")
+rest=RestApiClient(rest_url)
 rest.login(rest_username, rest_password)
 
 # The callback for when the client receives a CONNACK response from the server.
