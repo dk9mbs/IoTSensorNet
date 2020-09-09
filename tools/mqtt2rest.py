@@ -40,7 +40,7 @@ def on_message(client, userdata, msg):
     if address != "":
         data={"sensor_id":address, "sensor_value": value, "sensor_namespace":"restapi"}
         try:
-            print(rest.add("iot_sensor_data", data))
+            rest.add("iot_sensor_data", data)
         except NameError as err:
             print(f"{err}")
 
