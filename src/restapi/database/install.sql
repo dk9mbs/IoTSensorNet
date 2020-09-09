@@ -65,4 +65,4 @@ INSERT INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_u
     (10001,10001,-1,-1,-1,-1,10000);
 
 INSERT INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,solution_id) 
-    VALUES ('iottest','iot_sensor_data','insert','before',100,10000);
+    VALUES ('iot_setlast_value','iot_sensor_data','insert','before',100,10000);
