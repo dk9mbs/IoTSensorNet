@@ -38,5 +38,5 @@ def execute(context, plugin_context, params):
     </restapi>
     """
 
-    fetchparser=FetchXmlParser(fetch)
+    fetchparser=FetchXmlParser(fetch, context)
     DatabaseServices.exec(fetchparser, context, run_as_system=True)
