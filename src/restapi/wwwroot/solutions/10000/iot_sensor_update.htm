@@ -1,0 +1,73 @@
+{% extends "templates/base/base.htm" %}
+{% import "templates/base/uitools.htm" as forms %}
+
+
+
+{% block title %}TuxLog{% endblock %}
+
+{% block head %}
+    {{ super() }}
+{% endblock %}
+
+{% block content %}
+
+    {% call forms.record_form( table, id ) %}
+
+    {% call forms.row() %}
+        {% call forms.input('id', 'SensorID', 'Sensor ID', data['id'] ) %}
+        {% endcall %}
+    {% endcall %}
+
+    {% call forms.row() %}
+        {% call forms.input('alias', 'Alias', '', data['alias'] ) %}
+        {% endcall %}
+    {% endcall %}
+
+    {% call forms.row() %}
+        {% call forms.input('description', 'Description', '', data['description'] ) %}
+        {% endcall %}
+    {% endcall %}
+
+    {% call forms.row() %}
+        {% call forms.input('last_value', 'Last Value', '', data['last_value'] ) %}
+        {% endcall %}
+    {% endcall %}
+
+    {% call forms.row() %}
+        {% call forms.input('last_value_on', 'Last value on', '', data['last_value_on'] ) %}
+        {% endcall %}
+    {% endcall %}
+
+    {% call forms.row() %}
+        {% call forms.input('min_value', 'Min. value', '', data['min_value'] ) %}
+        {% endcall %}
+    {% endcall %}
+    {% call forms.row() %}
+        {% call forms.input('max_value', 'Max. value', '', data['max_value'] ) %}
+        {% endcall %}
+    {% endcall %}
+    {% call forms.row() %}
+        {% call forms.input('unit', 'Unit', '', data['unit'] ) %}
+        {% endcall %}
+    {% endcall %}
+    {% call forms.row() %}
+        {% call forms.input('watchdog_warning_sec', 'Watchdoc in sec.', '', data['watchdog_warning_sec'] ) %}
+        {% endcall %}
+    {% endcall %}
+    {% call forms.row() %}
+        {% call forms.input('days_in_history', 'History in days', '', data['days_in_history'] ) %}
+        {% endcall %}
+    {% endcall %}
+    {% call forms.row() %}
+        {% call forms.input('auto_delete_sensor_data', 'Autodelete (0 or -1)', '', data['auto_delete_sensor_data'] ) %}
+        {% endcall %}
+    {% endcall %}
+
+
+    {% endcall %}
+
+{% endblock %}
+
+
+
+

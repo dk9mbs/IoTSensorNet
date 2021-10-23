@@ -4,3 +4,5 @@ src/sensor/repeater/data/*.cfg
 3D/gcode
 3D/stl
 *.FCStd1
+*.pyc
+

@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS iot_sensor (
 
 DELETE FROM api_group_permission WHERE solution_id=10000;
 DELETE FROM api_user_group WHERE solution_id=10000;
+DELETE FROM api_table_view WHERE solution_id=10000;
 DELETE FROM api_table WHERE solution_id=10000;
 DELETE FROM api_session WHERE user_id IN(10000,10001);
 DELETE FROM api_user WHERE solution_id=10000;
@@ -66,3 +67,35 @@ INSERT INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_u
 
 INSERT INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,solution_id) 
     VALUES ('iot_setlast_value','iot_sensor_data','insert','before',100,10000);
+
+/* Listviews */
+INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml) VALUES (
+10001,'LISTVIEW','default',10001,'id',10000,'<restapi type="select">
+    <table name="iot_sensor" alias="s"/>
+    <filter type="or">
+        <condition field="description" table_alias="s" value="$$query$$" operator=" like "/>
+        <condition field="alias" table_alias="s" value="$$query$$" operator=" like "/>
+    </filter>
+    <orderby>
+        <field name="last_value_on" alias="s" sort="DESC"/>
+    </orderby>
+    <select>
+        <field name="id" table_alias="s" alias="id"/>
+        <field name="description" table_alias="s"/>
+        <field name="last_value" table_alias="s"/>
+        <field name="last_value_on" table_alias="s"/>
+    </select>
+</restapi>');
+
+INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml) VALUES (
+10002,'SELECTVIEW','default',10001,'id',10000,'<restapi type="select">
+    <table name="iot_sensor" alias="s"/>
+    <orderby>
+        <field name="description" alias="s" sort="ASC"/>
+    </orderby>
+    <select>
+        <field name="id" table_alias="s" alias="id"/>
+        <field name="description" table_alias="s" alias="name"/>
+    </select>
+</restapi>');
+
