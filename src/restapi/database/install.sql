@@ -127,17 +127,17 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
     </select>
 </restapi>');
 
-
 INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml) VALUES (
 10003,'LISTVIEW','default',10002,'id',10000,'<restapi type="select">
     <table name="iot_sensor_routing" alias="r"/>
     <filter type="or">
-        <condition field="description" table_alias="s" value="$$query$$" operator=" like "/>
-        <condition field="external_sensor_id" table_alias="r" value="$$query$$" operator=" like "/>
-        <condition field="internal_sensor_id" table_alias="r" value="$$query$$" operator=" like "/>
+        <condition field="description" alias="r" value="$$query$$" operator=" like "/>
+        <condition field="external_sensor_id" alias="r" value="$$query$$" operator=" like "/>
+        <condition field="internal_sensor_id" alias="r" value="$$query$$" operator=" like "/>
     </filter>
     <joins>
         <join type="inner" table="iot_sensor_routing_status" alias="rs" condition="r.status_id=rs.id"/>
+        <join type="left" table="iot_sensor" alias="s" condition="r.internal_sensor_id=s.id"/>
     </joins>
     <orderby>
         <field name="external_sensor_id" alias="r" sort="ASC"/>
@@ -146,19 +146,39 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
         <field name="id" table_alias="r" alias="id"/>
         <field name="external_sensor_id" table_alias="r"/>
         <field name="internal_sensor_id" table_alias="r"/>
+        <field name="description" table_alias="s"/>
         <field name="name" table_alias="rs" alias="status"/>
         <field name="last_value_on" table_alias="r"/>
     </select>
 </restapi>');
 
 INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml) VALUES (
-10004,'SELECTVIEW','default',10002,'id',10000,'<restapi type="select">
-    <table name="iot_sensor_routing" alias="r"/>
+10005,'LISTVIEW','default',10003,'id',10000,'<restapi type="select">
+    <table name="iot_sensor_routing_status" alias="rs"/>
+    <filter type="or">
+        <condition field="name" alias="rs" value="$$query$$" operator=" like "/>
+    </filter>
     <orderby>
-        <field name="external_sensor_id" alias="r" sort="ASC"/>
+        <field name="id" alias="rs" sort="ASC"/>
     </orderby>
     <select>
-        <field name="id" table_alias="r" alias="id"/>
-        <field name="external_sensor_id" table_alias="r" alias="name"/>
+        <field name="id" table_alias="rs" alias="id"/>
+        <field name="name" table_alias="rs"/>
     </select>
 </restapi>');
+
+INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml) VALUES (
+10006,'SELECTVIEW','default',10003,'id',10000,'<restapi type="select">
+    <table name="iot_sensor_routing_status" alias="rs"/>
+    <filter type="or">
+        <condition field="name" alias="rs" value="$$query$$" operator=" like "/>
+    </filter>
+    <orderby>
+        <field name="id" alias="rs" sort="ASC"/>
+    </orderby>
+    <select>
+        <field name="id" table_alias="rs" alias="id"/>
+        <field name="name" table_alias="rs" alias="name"/>
+    </select>
+</restapi>');
+

@@ -1,0 +1,32 @@
+{% extends "templates/base/base.htm" %}
+{% import "templates/base/uitools.htm" as forms %}
+
+
+
+{% block title %}TuxLog{% endblock %}
+
+{% block head %}
+    {{ super() }}
+{% endblock %}
+
+{% block content %}
+
+    {% call forms.record_form( table, '' ) %}
+
+    {% call forms.row() %}
+        {% call forms.input('external_sensor_id', 'External Sensor ID', '', '' ) %}
+        {% endcall %}
+    {% endcall %}
+
+    {% call forms.row() %}
+        {% call forms.input('description', 'Description', '', '' ) %}
+        {% endcall %}
+    {% endcall %}
+
+    {% endcall %}
+
+{% endblock %}
+
+
+
+

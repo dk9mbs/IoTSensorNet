@@ -14,7 +14,7 @@
     {% call forms.record_form( table, id ) %}
 
     {% call forms.row() %}
-        {% call forms.input('id', 'SensorID', 'Sensor ID', data['id'] ) %}
+        {% call forms.input('id', 'SensorID', 'Sensor ID', data['id'], disabled=True ) %}
         {% endcall %}
     {% endcall %}
 
@@ -34,7 +34,7 @@
     {% endcall %}
 
     {% call forms.row() %}
-        {% call forms.input('last_value_on', 'Last value on', '', data['last_value_on'] ) %}
+        {% call forms.input('last_value_on', 'Last value on', '', data['last_value_on'], disabled=True ) %}
         {% endcall %}
     {% endcall %}
 

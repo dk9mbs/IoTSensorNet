@@ -1,0 +1,58 @@
+{% extends "templates/base/base.htm" %}
+{% import "templates/base/uitools.htm" as forms %}
+
+
+
+{% block title %}TuxLog{% endblock %}
+
+{% block head %}
+    {{ super() }}
+{% endblock %}
+
+{% block content %}
+
+    {% call forms.record_form( table, id ) %}
+
+    {% call forms.row() %}
+        {% call forms.input('id', 'ID', 'ID', data['id'], disabled=True ) %}
+        {% endcall %}
+    {% endcall %}
+
+    {% call forms.row_form_group() %}
+        {% call forms.data_select('internal_sensor_id','Internal Sensor', data['internal_sensor_id'], 'iot_sensor', 'default','%') %}
+        {% endcall %}
+    {% endcall %}
+
+    {% call forms.row() %}
+        {% call forms.input('external_sensor_id', 'External Sensor ID', '', data['external_sensor_id'] ) %}
+        {% endcall %}
+    {% endcall %}
+
+    {% call forms.row() %}
+        {% call forms.input('description', 'Description', '', data['description'] ) %}
+        {% endcall %}
+    {% endcall %}
+
+    {% call forms.row_form_group() %}
+        {% call forms.data_select('status_id','Status', data['status_id'], 'iot_sensor_routing_status', 'default','%') %}
+        {% endcall %}
+    {% endcall %}
+
+    {% call forms.row() %}
+        {% call forms.input('last_value_on', 'Last value on', '', data['last_value_on'], disabled=True ) %}
+        {% endcall %}
+    {% endcall %}
+
+    {% call forms.row() %}
+        {% call forms.input('created_on', 'Created on', '', data['created_on'], disabled=True ) %}
+        {% endcall %}
+    {% endcall %}
+
+
+    {% endcall %}
+
+{% endblock %}
+
+
+
+
