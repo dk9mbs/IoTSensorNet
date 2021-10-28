@@ -26,6 +26,7 @@ class TestPluginExecution(unittest.TestCase):
         self.__delete_sensor(sensor1)
         self.__delete_sensor(sensor2)
         self.__delete_sensor(sensor3)
+        self.__delete_sensor(external_sensor)
 
         #create one sensor
         self.__create_sensor(sensor1, sensor1, sensor1)
