@@ -14,8 +14,8 @@
 
 #define ENABLE_ONEWIRE true
 #define ENABLE_DHT true
-#define ENABLE_LIGHTNESS true
-#define ENABLE_RAINFALL true
+#define ENABLE_LIGHTNESS false
+#define ENABLE_RAINFALL false
 #define ENABLE_DISPLAY true
 
 #ifdef ESP32
@@ -97,10 +97,12 @@ char packetBuffer[UDP_TX_PACKET_MAX_SIZE + 1];
 boolean modeDeepSleep=false;
 boolean runSetup=false;
 long loopDelay=0;
+String dspLine1;
+String dspLine2;
 
 int state=0; // Status from Statemachine
 
-HTTPClient http;
+//HTTPClient http;
 
 void setup() { 
   Serial.begin(115200);
@@ -129,6 +131,7 @@ void setup() {
 #endif
     setupWifiAP();
     setupHttpAdmin();
+    return;
   } else {
 #if ENABLE_DISPLAY
     printLcd(lcd, 0,1, "setup hw ...",1);
@@ -178,7 +181,7 @@ void setup() {
 
 void loop() {
     httpServer.handleClient(); 
-
+    if (runSetup) return;
     mqttConnect();
     //mqtt.processPackets(10000);
     // Statemachine
@@ -220,9 +223,14 @@ void loop() {
       publishMqttSensorPayload(sensorTopic, addressHum, valueHum);
       publishMqttSensorPayload(sensorTopic, addressTemp, valueTemp);
 
+
+      dspLine1="T:"+String(valueTemp)+"C";
+      dspLine2="H:"+String(valueHum)+"%";
 #if ENABLE_DISPLAY
-      printLcd(lcd, 0,0, "T:"+String(valueTemp)+"C H:"+String(valueHum)+"%", 1);
-      printLcd(lcd, 0,1, "L:"+String(100)+"Lux", 0);
+      //printLcd(lcd, 0,0, "T:"+String(valueTemp)+"C H:"+String(valueHum)+"%", 1);
+      //printLcd(lcd, 0,1, "L:"+String(100)+"Lux", 0);
+      printLcd(lcd, 0,0, String(dspLine1), 1);
+      printLcd(lcd, 0,1, String(dspLine2), 0);
 #endif
 
 #endif
@@ -236,6 +244,20 @@ void loop() {
       readRainfall(address, value);
       publishMqttSensorPayload(sensorTopic, address, value);
 #endif
+
+      HTTPClient http;
+      String result="Err";
+      http.begin("http://192.168.2.111:5000/api/v1.0/data/iot_sensor/WOHNTEMP01");
+      http.addHeader("restapi-username", "root");
+      http.addHeader("restapi-password", "password");
+      int httpCode=http.GET();
+      if(httpCode==200) {
+        result=http.getString();
+      } 
+      http.end();
+      Serial.println(httpCode);
+      Serial.println(result);
+
 
       state=2;
     } // Process Task
@@ -378,7 +400,7 @@ void readOneWireTempMultible() {
     temperatureC = sensors.getTempCByIndex(x);
     Serial.print(address+": ");
     Serial.print(temperatureC);
-    Serial.print("ºC : sending ... ");
+    Serial.println("ºC : sending ... ");
 
     dtostrf(temperatureC,7, 3, temperaturenow);  //// convert float to char
 
@@ -582,17 +604,18 @@ void setupFileSystem() {
   }
   if(!SPIFFS.exists(getConfigFilename("ssid"))) saveConfigValue("ssid", "wlan-ssid");
   if(!SPIFFS.exists(getConfigFilename("password"))) saveConfigValue("password", "wlan-password");
-  if(!SPIFFS.exists(getConfigFilename("mode"))) saveConfigValue("mode", "deepsleep");
+  if(!SPIFFS.exists(getConfigFilename("mode"))) saveConfigValue("mode", "default");//deepsleep 
   if(!SPIFFS.exists(getConfigFilename("sleeptime"))) saveConfigValue("sleeptime", "60");
   if(!SPIFFS.exists(getConfigFilename("adminpwd"))) saveConfigValue("adminpwd", "123456789ff");
 
-  if(!SPIFFS.exists(getConfigFilename("staticbrokeraddr"))) saveConfigValue("staticbrokeraddr", "");
+  if(!SPIFFS.exists(getConfigFilename("staticbrokeraddr"))) saveConfigValue("staticbrokeraddr", "192.168.4.1");
   if(!SPIFFS.exists(getConfigFilename("staticbrokerport"))) saveConfigValue("staticbrokerport", "1883");
 
   if(!SPIFFS.exists(getConfigFilename("brokeruser"))) saveConfigValue("brokeruser", "username");
   if(!SPIFFS.exists(getConfigFilename("brokerpwd"))) saveConfigValue("brokerpwd", "password");
   if(!SPIFFS.exists(getConfigFilename("hostname"))) saveConfigValue("hostname", "node");
   if(!SPIFFS.exists(getConfigFilename("pubtopic"))) saveConfigValue("pubtopic", "temp/sensor");
+
 }
 
 void setupWifiAP(){
