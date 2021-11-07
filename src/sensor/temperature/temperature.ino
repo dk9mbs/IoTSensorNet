@@ -17,6 +17,9 @@
 #define ENABLE_LIGHTNESS false
 #define ENABLE_RAINFALL false
 #define ENABLE_DISPLAY true
+#define ENABLE_UDP false
+#define ENABLE_MQTT false
+#define ENABLE_HTTP true
 
 #ifdef ESP32
 #pragma message(THIS EXAMPLE IS FOR ESP8266 ONLY!)
@@ -25,7 +28,11 @@
 
 #include "dk9mbs_tools.h"
 #include <ESP8266WiFi.h>
+
+#if ENABLE_UDP
 #include <WiFiUdp.h>
+#endif
+
 #include <FS.h>
 
 #if ENABLE_ONEWIRE
@@ -41,9 +48,10 @@
 #include <LiquidCrystal_I2C.h>
 #endif
 
+#if ENABLE_MQTT
 #include "Adafruit_MQTT.h"
 #include "Adafruit_MQTT_Client.h"
-
+#endif
 
 #define ONEWIREBUSPIN 4
 #define SETUPPIN 5 
@@ -69,14 +77,19 @@ DallasTemperature sensors(&oneWire);
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 #endif
 
+#if ENABLE_UDP
 WiFiUDP udp;
+#endif
+
 WiFiClient espClient;
 ESP8266WebServer httpServer(80);
 HTTPClient http;
 
+#if ENABLE_MQTT
 Adafruit_MQTT_Client mqtt(&espClient, "", 1883, "", "");
 Adafruit_MQTT_Publish sensorTopic = Adafruit_MQTT_Publish(&mqtt, MQTT_PUB_TOPIC, MQTT_QOS_0);
 //Adafruit_MQTT_Subscribe displayChanel = Adafruit_MQTT_Subscribe(&mqtt, "node/test", MQTT_QOS_0);
+#endif
 
 #if ENABLE_DHT
 #include "DHT.h"
@@ -94,18 +107,28 @@ long lastMsg = 0;
 char msg[50];
 int value = 0;
 int modeSleepTimeSec=60;
+#if ENABLE_UDP
 char packetBuffer[UDP_TX_PACKET_MAX_SIZE + 1];
+#endif
 boolean modeDeepSleep=false;
 boolean runSetup=false;
 long loopDelay=0;
 String dspLine1;
 String dspLine2;
 
+String restApiUrl;
+String restApiUser;
+String restApiPwd;
+
 int state=0; // Status from Statemachine
 
 void setup() { 
   Serial.begin(115200);
 
+  restApiUrl=readConfigValue("restapiurl");
+  restApiUser=readConfigValue("restapiuser");
+  restApiPwd=readConfigValue("restapipwd");
+  
 #if ENABLE_DISPLAY
   lcd.begin(DISPLAY_SDA, DISPLAY_SCL);
   lcd.setCursor(0, 0); // Spalte, Zeile
@@ -116,6 +139,11 @@ void setup() {
   setupIo();
   setupFileSystem();
 
+  restApiUrl=readConfigValue("restapiurl");
+  restApiUser=readConfigValue("restapiuser");
+  restApiPwd=readConfigValue("restapipwd");
+  Serial.println(restApiUrl);
+  Serial.println(restApiUser);
 
   if(digitalRead(SETUPPIN)==0) runSetup=true;
   
@@ -169,11 +197,25 @@ void setup() {
 #endif
 
     delay(500);
+
+#if ENABLE_UDP    
     unsigned int localPort=3333;
     udp.begin(localPort);
     delay(100);
-    
-    serverLog(readConfigValue("hostname"), "Node started!");
+#endif
+
+    int errCount;
+    errCount=0;
+    serverLog(errCount, readConfigValue("hostname"), "Node started.");
+    if(errCount>0) {
+      printLcd(lcd, 0,0, "Log error",1);
+      printLcd(lcd, 0,1, "restart the node",0);
+      reset(60000);
+    }
+#if ENABLE_DISPLAY
+    printLcd(lcd, 0,0, String("Running"), 1);
+#endif
+
   } // run Setup
 
 
@@ -182,7 +224,13 @@ void setup() {
 void loop() {
     httpServer.handleClient(); 
     if (runSetup) return;
+
+    int errCount;
+    errCount=0;
+    
+#if ENABLE_MQTT
     mqttConnect();
+#endif
     //mqtt.processPackets(10000);
     // Statemachine
     long now = millis();
@@ -206,7 +254,7 @@ void loop() {
   
 
 #if ENABLE_ONEWIRE
-      readOneWireTempMultible();
+      readOneWireTempMultible(errCount);
 #endif
 
 #if ENABLE_DHT
@@ -214,21 +262,27 @@ void loop() {
       String addressTemp;
       float valueHum;
       float valueTemp;
-      
+
+#if ENABLE_MQTT      
       mqtt.disconnect();
+#endif
       readDhtHum(dht, addressHum, valueHum);
       readDhtTemp(dht,addressTemp, valueTemp);
+
+#if ENABLE_MQTT  
       mqttConnect();
-  
       publishMqttSensorPayload(sensorTopic, addressHum, valueHum);
       publishMqttSensorPayload(sensorTopic, addressTemp, valueTemp);
-
+#endif
+#if ENABLE_HTTP
+      publishHttpSensorPayload(errCount, addressHum,valueHum);
+      publishHttpSensorPayload(errCount, addressTemp,valueTemp);
+#endif
 
       dspLine1="T:"+String(valueTemp)+"C";
       dspLine2="H:"+String(valueHum)+"%";
+      
 #if ENABLE_DISPLAY
-      //printLcd(lcd, 0,0, "T:"+String(valueTemp)+"C H:"+String(valueHum)+"%", 1);
-      //printLcd(lcd, 0,1, "L:"+String(100)+"Lux", 0);
       printLcd(lcd, 0,0, String(dspLine1), 1);
       printLcd(lcd, 0,1, String(dspLine2), 0);
 #endif
@@ -245,6 +299,30 @@ void loop() {
       publishMqttSensorPayload(sensorTopic, address, value);
 #endif
 
+      // start
+//      http.begin(readConfigValue("restapiurl")+"data/iot_sensor/WOHNTEMP01");
+//      http.addHeader("restapi-username", readConfigValue("restapiuser"));
+//      http.addHeader("restapi-password", readConfigValue("restapipwd"));
+//      int httpCode=http.GET();
+//      if(httpCode==200) {
+//        dspLine1=http.getString();
+//      } 
+//      http.end();
+//      Serial.print("HTTP Code (get display):");
+//      Serial.println(httpCode);
+      getServerCommand(errCount);
+      // end
+      
+      // in case of http errors rebot the node
+      if(errCount>0) {
+        printLcd(lcd, 0,0, "Transfer error",1);
+        printLcd(lcd, 0,1, "restart the node",0);
+        Serial.println("HTTP Errors! I will reboot and try it again.");
+        Serial.print("HTTP errors:");
+        Serial.println(errCount);
+        reset(60000);
+      }
+
       state=2;
     } // Process Task
 
@@ -253,20 +331,7 @@ void loop() {
     if(  (now - loopDelay > (modeSleepTimeSec*1000)+POST_TASK_MSSEC  || loopDelay==0) && state==2  ) {
       Serial.println ("Executing post tasks...");
 
-      // start
-      //String result="";
-      http.begin(readConfigValue("restapiurl")+"data/iot_sensor/WOHNTEMP01");
-      http.addHeader("restapi-username", readConfigValue("restapiuser"));
-      http.addHeader("restapi-password", readConfigValue("restapipwd"));
-      int httpCode=http.GET();
-      if(httpCode==200) {
-        dspLine1=http.getString();
-      } 
-      http.end();
-      Serial.println(httpCode);
-      Serial.println(dspLine1); 
-      // end
-
+      
       Serial.println("Post tasks executed");
       
       loopDelay = now;
@@ -320,6 +385,7 @@ void readRainfall(String& address, float& value) {
 }
 #endif
 
+#if ENABLE_MQTT
 void publishMqttSensorPayload(Adafruit_MQTT_Publish& topic, String address, float value) {
   //strcpy(topic, readConfigValue("pubtopic").c_str());
   //Serial.print("Pubtopic: ");
@@ -331,6 +397,7 @@ void publishMqttSensorPayload(Adafruit_MQTT_Publish& topic, String address, floa
   //sensorTopic.publish(payload.c_str());
   topic.publish(payload.c_str());
 }
+#endif
 
 String createIoTDeviceAddress(String postfix) {
   String address=String(readConfigValue("mac")+"."+postfix);
@@ -384,7 +451,7 @@ void readLightness(String& address, float& lux) {
 #endif
 
 #if ENABLE_ONEWIRE
-void readOneWireTempMultible() {
+void readOneWireTempMultible(int & errCount) {
   Serial.println("reading the onewire sensors...");
 
   //sensors.requestTemperatures();
@@ -407,7 +474,13 @@ void readOneWireTempMultible() {
 
     dtostrf(temperatureC,7, 3, temperaturenow);  //// convert float to char
 
+#if ENABLE_MQTT
     publishMqttSensorPayload(sensorTopic, address,temperatureC); 
+#endif
+
+#if ENABLE_HTTP
+    publishHttpSensorPayload(errCount,address,temperatureC); 
+#endif
     /*
     payload = "{\"temp\":"+String(temperatureC)+", \"address\":\""+String(address)+"\"}";
 
@@ -421,6 +494,7 @@ void readOneWireTempMultible() {
 }
 #endif
 
+#if ENABLE_MQTT
 void mqttConnect() {
   int8_t ret;
 
@@ -457,7 +531,7 @@ void mqttConnect() {
   Serial.println(mqttPort);
   Serial.print("MQTT ClientID:");
   Serial.println(clientId);
-  
+
   mqtt=Adafruit_MQTT_Client(&espClient, mqttBroker.c_str(), mqttPort,clientId.c_str(), user.c_str(), pwd.c_str());
 
   Serial.print("Connecting to MQTT... ");
@@ -475,8 +549,9 @@ void mqttConnect() {
        }
   }
   Serial.println("MQTT Connected!");
-}
 
+}
+#endif
 // http server
 void setupHttpAdmin() {
   httpServer.on("/",handleHttpSetup);
@@ -703,7 +778,7 @@ void setupWifiSTA(const char* ssid, const char* password, const char* newMacStr,
 
 
 
-
+#if ENABLE_UDP
 void sendUdp(const char* msg, unsigned int port,const char* broadcast, WiFiUDP udp) {
   Serial.print("Sending udp:");
   Serial.println(msg);
@@ -716,10 +791,10 @@ void sendUdp(const char* msg, unsigned int port,const char* broadcast, WiFiUDP u
   endResult=udp.endPacket();
   if(!endResult) Serial.println("Error end package!!!");
 }
+#endif
 
 
-
-
+#if ENABLE_UDP
 String sendConfigRequestandWaitForResponse(String request) {
   int packetSize=0;
   unsigned int port=1200;
@@ -746,13 +821,15 @@ String sendConfigRequestandWaitForResponse(String request) {
   return String(packetBuffer);
 
 }
+#endif
 
+void reset(int msDelay) {
+  delay(msDelay);
+  // basically die and wait for WDT to reset me
+  while (1);
+}
 
-void serverLog(String node, String message) {
-  Serial.println(readConfigValue("restapiurl"));
-  Serial.println(readConfigValue("restapiuser"));
-  Serial.println(readConfigValue("restapipwd"));
-  
+void serverLog(int & errCount, String node, String message) {
   http.begin(readConfigValue("restapiurl")+"data/iot_log");
   http.addHeader("username", readConfigValue("restapiuser"));
   http.addHeader("password", readConfigValue("restapipwd"));
@@ -764,6 +841,51 @@ void serverLog(String node, String message) {
     Serial.println("Log sended");
   } else {
     Serial.println("cannot send logdata!!!"); 
+    errCount++;
   }
   http.end();
+}
+
+
+void publishHttpSensorPayload(int & errCount, String address, float value) {
+  String payload="";
+  payload = "{\"sensor_value\":"+String(value)+", \"sensor_id\":\""+address+"\", \"sensor_namespace\":\"restapi\"  }";
+  Serial.println("====================================");
+  Serial.println("publishing sensor data via http");
+  
+  http.begin(restApiUrl+"data/iot_sensor_data");
+  http.addHeader("username", restApiUser);
+  http.addHeader("password", restApiPwd);
+  http.addHeader("Content-Type", "application/json");
+  
+  int httpCode=http.POST( payload   );
+
+  if(httpCode==200) {
+    Serial.println("Sensordata sended");
+  } else {
+    Serial.println("cannot transfer sensordata. I will reboot in postprocess"); 
+    errCount++;
+    Serial.print("ErrCount:");
+    Serial.println(errCount);
+  }
+  http.end();
+  Serial.println("sensor data published!");
+
+}
+
+void getServerCommand(int & errCount) {
+      // start
+      http.begin(restApiUrl+"data/iot_sensor/WOHNTEMP01");
+      http.addHeader("restapi-username", restApiUser);
+      http.addHeader("restapi-password", restApiPwd);
+      int httpCode=http.GET();
+      if(httpCode==200) {
+        dspLine1=http.getString();
+      } else {
+        errCount++; 
+      }
+      http.end();
+      Serial.print("HTTP Code (get display):");
+      Serial.println(httpCode);
+      // end
 }
