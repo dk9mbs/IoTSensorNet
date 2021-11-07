@@ -45,6 +45,25 @@ CREATE TABLE IF NOT EXISTS iot_sensor_routing (
     FOREIGN KEY(status_id) REFERENCES iot_sensor_routing_status(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+CREATE TABLE IF NOT EXISTS iot_log_source (
+    id int NOT NULL,
+    name varchar(50) NOT NULL,
+    PRIMARY KEY(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+INSERT IGNORE INTO iot_log_source(id,name) VALUES (1,'Sensor Node');
+
+CREATE TABLE IF NOT EXISTS iot_log (
+    id int NOT NULL AUTO_INCREMENT,
+    name varchar(250) NOT NULL,
+    message text NULL,
+    source_id int NOT NULL,
+    created_on timestamp default CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY(id),
+    FOREIGN KEY(source_id) REFERENCES iot_log_source(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+
 INSERT IGNORE INTO api_solution(id,name) VALUES (10000, 'IoTSensorNet');
 
 INSERT IGNORE INTO api_user (id,username,password,is_admin,disabled,solution_id) VALUES (10000,'IoTSrv','password',0,0,10000);
@@ -59,19 +78,27 @@ INSERT IGNORE INTO api_user_group(user_id,group_id,solution_id) VALUES (10001,10
 
 INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
     VALUES
-    (10000,'iot_sensor_data','iot_sensor_data','id','Int','sensor_value',10000);
+    (10000,'iot_sensor_data','iot_sensor_data','id','int','sensor_value',10000);
 
 INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
     VALUES
-    (10001,'iot_sensor','iot_sensor','id','Int','description',10000);
+    (10001,'iot_sensor','iot_sensor','id','int','description',10000);
 
 INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
     VALUES
-    (10002,'iot_sensor_routing','iot_sensor_routing','id','Int','description',10000);
+    (10002,'iot_sensor_routing','iot_sensor_routing','id','int','description',10000);
 
 INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
     VALUES
-    (10003,'iot_sensor_routing_status','iot_sensor_routing_status','id','Int','name',10000);
+    (10003,'iot_sensor_routing_status','iot_sensor_routing_status','id','int','name',10000);
+
+INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
+    VALUES
+    (10004,'iot_log_source','iot_log_source','id','int','name',10000);
+
+INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
+    VALUES
+    (10005,'iot_log','iot_log','id','int','name',10000);
 
 
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
@@ -80,6 +107,20 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
     (10000,10001,0,-1,0,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
+    VALUES
+    (10000,10002,0,-1,0,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
+    VALUES
+    (10000,10003,0,-1,0,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
+    VALUES
+    (10000,10004,0,-1,0,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
+    VALUES
+    (10000,10005,-1,-1,0,10000);
+
+
 
 /* Admin */
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
@@ -88,6 +129,20 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
     VALUES
     (10001,10001,-1,-1,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
+    VALUES
+    (10001,10002,-1,-1,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
+    VALUES
+    (10001,10003,-1,-1,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
+    VALUES
+    (10001,10004,-1,-1,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
+    VALUES
+    (10001,10005,-1,-1,-1,-1,10000);
+
+
 
 INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,solution_id) 
     VALUES ('iot_sensor_routing','iot_sensor_data','insert','before',90,10000);
@@ -146,7 +201,8 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
         <field name="id" table_alias="r" alias="id"/>
         <field name="external_sensor_id" table_alias="r"/>
         <field name="internal_sensor_id" table_alias="r"/>
-        <field name="description" table_alias="s"/>
+        <field name="description" table_alias="r" alias="Routing"/>
+        <field name="description" table_alias="s" alias="Sensor"/>
         <field name="name" table_alias="rs" alias="status"/>
         <field name="last_value_on" table_alias="r"/>
     </select>
@@ -182,3 +238,51 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
     </select>
 </restapi>');
 
+
+INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml) VALUES (
+10007,'LISTVIEW','default',10004,'id',10000,'<restapi type="select">
+    <table name="iot_log_source" alias="l"/>
+    <filter type="or">
+        <condition field="name" alias="l" value="$$query$$" operator=" like "/>
+    </filter>
+    <orderby>
+        <field name="name" alias="l" sort="ASC"/>
+    </orderby>
+    <select>
+        <field name="id" table_alias="l" alias="id"/>
+        <field name="name" table_alias="l"/>
+    </select>
+</restapi>');
+
+INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml) VALUES (
+10008,'SELECTVIEW','default',10004,'id',10000,'<restapi type="select">
+    <table name="iot_log_source" alias="l"/>
+    <filter type="or">
+        <condition field="name" alias="l" value="$$query$$" operator=" like "/>
+    </filter>
+    <orderby>
+        <field name="name" alias="l" sort="ASC"/>
+    </orderby>
+    <select>
+        <field name="id" table_alias="l" alias="id"/>
+        <field name="name" table_alias="l" alias="name"/>
+    </select>
+</restapi>');
+
+
+INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml) VALUES (
+10009,'LISTVIEW','default',10005,'id',10000,'<restapi type="select">
+    <table name="iot_log" alias="l"/>
+    <filter type="or">
+        <condition field="name" alias="l" value="$$query$$" operator=" like "/>
+    </filter>
+    <orderby>
+        <field name="id" alias="l" sort="DESC"/>
+    </orderby>
+    <select>
+        <field name="id" table_alias="l" alias="id"/>
+        <field name="name" table_alias="l"/>
+        <field name="message" table_alias="l"/>
+        <field name="created_on" table_alias="l"/>
+    </select>
+</restapi>');

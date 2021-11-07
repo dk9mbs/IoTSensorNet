@@ -72,6 +72,7 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 WiFiUDP udp;
 WiFiClient espClient;
 ESP8266WebServer httpServer(80);
+HTTPClient http;
 
 Adafruit_MQTT_Client mqtt(&espClient, "", 1883, "", "");
 Adafruit_MQTT_Publish sensorTopic = Adafruit_MQTT_Publish(&mqtt, MQTT_PUB_TOPIC, MQTT_QOS_0);
@@ -101,8 +102,6 @@ String dspLine1;
 String dspLine2;
 
 int state=0; // Status from Statemachine
-
-//HTTPClient http;
 
 void setup() { 
   Serial.begin(115200);
@@ -173,10 +172,11 @@ void setup() {
     unsigned int localPort=3333;
     udp.begin(localPort);
     delay(100);
+    
+    serverLog(readConfigValue("hostname"), "Node started!");
+  } // run Setup
 
-    //displayChanel.setCallback(mqttDisplayCallback);
-    //mqtt.subscribe(&displayChanel);
-  } // setup 
+
 }
 
 void loop() {
@@ -245,20 +245,6 @@ void loop() {
       publishMqttSensorPayload(sensorTopic, address, value);
 #endif
 
-      HTTPClient http;
-      String result="Err";
-      http.begin("http://192.168.2.111:5000/api/v1.0/data/iot_sensor/WOHNTEMP01");
-      http.addHeader("restapi-username", "root");
-      http.addHeader("restapi-password", "password");
-      int httpCode=http.GET();
-      if(httpCode==200) {
-        result=http.getString();
-      } 
-      http.end();
-      Serial.println(httpCode);
-      Serial.println(result);
-
-
       state=2;
     } // Process Task
 
@@ -266,6 +252,23 @@ void loop() {
     // Postprocess
     if(  (now - loopDelay > (modeSleepTimeSec*1000)+POST_TASK_MSSEC  || loopDelay==0) && state==2  ) {
       Serial.println ("Executing post tasks...");
+
+      // start
+      //String result="";
+      http.begin(readConfigValue("restapiurl")+"data/iot_sensor/WOHNTEMP01");
+      http.addHeader("restapi-username", readConfigValue("restapiuser"));
+      http.addHeader("restapi-password", readConfigValue("restapipwd"));
+      int httpCode=http.GET();
+      if(httpCode==200) {
+        dspLine1=http.getString();
+      } 
+      http.end();
+      Serial.println(httpCode);
+      Serial.println(dspLine1); 
+      // end
+
+      Serial.println("Post tasks executed");
+      
       loopDelay = now;
       state=0;
     }
@@ -542,6 +545,11 @@ void handleHttpSetup() {
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Password</div><INPUT style=\"width:99%;\" type=\"text\" name=\"BROKERPWD\" value=\""+ readConfigValue("brokerpwd") +"\"></div>"
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Publish topic</div><INPUT disabled maxlength=\"50\" style=\"width:99%;\" type=\"text\" name=\"PUBTOPIC\" value=\""+ MQTT_PUB_TOPIC +"\"></div>"
     "</P>"
+    "<P>RestAPI"
+    "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>RestAPI URL (for example: http://192.168.2.123:5000/api/v1.0/)</div><INPUT style=\"width:99%;\" type=\"text\" name=\"RESTAPIURL\" value=\""+ readConfigValue("restapiurl") +"\"></div>"
+    "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>RestAPI User</div><INPUT style=\"width:99%;\" type=\"text\" name=\"RESTAPIUSER\" value=\""+ readConfigValue("restapiuser") +"\"></div>"
+    "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>RestAPI Password</div><INPUT style=\"width:99%;\" type=\"text\" name=\"RESTAPIPWD\" value=\""+ readConfigValue("restapipwd") +"\"></div>"
+    "</P>"
     "<div>"
     "<INPUT type=\"submit\" value=\"Save\">"
     "<INPUT type=\"submit\" name=\"RESET\" value=\"Save and Reset\">"
@@ -566,6 +574,11 @@ void handleSubmit() {
   saveConfigValue("brokerpwd", httpServer.arg("BROKERPWD"));
   saveConfigValue("hostname", httpServer.arg("HOSTNAME"));
   saveConfigValue("pubtopic", httpServer.arg("PUBTOPIC"));
+
+  saveConfigValue("restapiurl", httpServer.arg("RESTAPIURL"));
+  saveConfigValue("restapiuser", httpServer.arg("RESTAPIUSER"));
+  saveConfigValue("restapipwd", httpServer.arg("RESTAPIPWD"));
+
 }
 
 void handleReset() {
@@ -604,7 +617,7 @@ void setupFileSystem() {
   }
   if(!SPIFFS.exists(getConfigFilename("ssid"))) saveConfigValue("ssid", "wlan-ssid");
   if(!SPIFFS.exists(getConfigFilename("password"))) saveConfigValue("password", "wlan-password");
-  if(!SPIFFS.exists(getConfigFilename("mode"))) saveConfigValue("mode", "default");//deepsleep 
+  if(!SPIFFS.exists(getConfigFilename("mode"))) saveConfigValue("mode", "loop");//deepsleep or loop
   if(!SPIFFS.exists(getConfigFilename("sleeptime"))) saveConfigValue("sleeptime", "60");
   if(!SPIFFS.exists(getConfigFilename("adminpwd"))) saveConfigValue("adminpwd", "123456789ff");
 
@@ -615,6 +628,10 @@ void setupFileSystem() {
   if(!SPIFFS.exists(getConfigFilename("brokerpwd"))) saveConfigValue("brokerpwd", "password");
   if(!SPIFFS.exists(getConfigFilename("hostname"))) saveConfigValue("hostname", "node");
   if(!SPIFFS.exists(getConfigFilename("pubtopic"))) saveConfigValue("pubtopic", "temp/sensor");
+
+  if(!SPIFFS.exists(getConfigFilename("restapiurl"))) saveConfigValue("restapiurl", "http://192.168.2.111:5000/api/v1.0/");
+  if(!SPIFFS.exists(getConfigFilename("restapiuser"))) saveConfigValue("restapiuser", "root");
+  if(!SPIFFS.exists(getConfigFilename("restapipwd"))) saveConfigValue("restapipwd", "password");
 
 }
 
@@ -728,4 +745,25 @@ String sendConfigRequestandWaitForResponse(String request) {
   packetBuffer[n] = 0;
   return String(packetBuffer);
 
+}
+
+
+void serverLog(String node, String message) {
+  Serial.println(readConfigValue("restapiurl"));
+  Serial.println(readConfigValue("restapiuser"));
+  Serial.println(readConfigValue("restapipwd"));
+  
+  http.begin(readConfigValue("restapiurl")+"data/iot_log");
+  http.addHeader("username", readConfigValue("restapiuser"));
+  http.addHeader("password", readConfigValue("restapipwd"));
+  http.addHeader("Content-Type", "application/json");
+  
+  int httpCode=http.POST( "{\"name\": \""+node+"\", \"message\": \""+message+"\", \"source_id\":\"1\" }"   );
+
+  if(httpCode==200) {
+    Serial.println("Log sended");
+  } else {
+    Serial.println("cannot send logdata!!!"); 
+  }
+  http.end();
 }
