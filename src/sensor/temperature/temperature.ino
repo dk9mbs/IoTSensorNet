@@ -129,12 +129,12 @@ void setup() {
   restApiUser=readConfigValue("restapiuser");
   restApiPwd=readConfigValue("restapipwd");
   
-#if ENABLE_DISPLAY
+  #if ENABLE_DISPLAY
   lcd.begin(DISPLAY_SDA, DISPLAY_SCL);
   lcd.setCursor(0, 0); // Spalte, Zeile
   printLcd(lcd, 0,1, "booting ...",1);
   delay (1000);
-#endif
+  #endif
 
   setupIo();
   setupFileSystem();
@@ -153,16 +153,16 @@ void setup() {
   Serial.println(readConfigValue("adminpwd"));
   
   if(runSetup) {
-#if ENABLE_DISPLAY
-    printLcd(lcd, 0,1, "enter setup ...",1);
-#endif
+  #if ENABLE_DISPLAY
+  printLcd(lcd, 0,1, "enter setup ...",1);
+  #endif
     setupWifiAP();
     setupHttpAdmin();
     return;
   } else {
-#if ENABLE_DISPLAY
+    #if ENABLE_DISPLAY
     printLcd(lcd, 0,1, "setup hw ...",1);
-#endif
+    #endif
     
     setupHttpAdmin();
     String mode=readConfigValue("mode");
@@ -184,25 +184,25 @@ void setup() {
 
     setupWifiSTA(readConfigValue("ssid").c_str(), readConfigValue("password").c_str(), readConfigValue("mac").c_str(), modeDeepSleep);
     
-#if ENABLE_ONEWIRE    
+    #if ENABLE_ONEWIRE    
     sensors.begin();
-#endif
+    #endif
 
-#if ENABLE_DHT
+    #if ENABLE_DHT
     dht.begin(); 
-#endif
+    #endif
 
-#if ENABLE_RAINFALL
+    #if ENABLE_RAINFALL
     attachInterrupt(digitalPinToInterrupt(RAINFALL_PIN), rainfallIsr, RISING);
-#endif
+    #endif
 
     delay(500);
 
-#if ENABLE_UDP    
+    #if ENABLE_UDP    
     unsigned int localPort=3333;
     udp.begin(localPort);
     delay(100);
-#endif
+    #endif
 
     int errCount;
     errCount=0;
@@ -212,9 +212,9 @@ void setup() {
       printLcd(lcd, 0,1, "restart the node",0);
       reset(60000);
     }
-#if ENABLE_DISPLAY
+    #if ENABLE_DISPLAY
     printLcd(lcd, 0,0, String("Running"), 1);
-#endif
+    #endif
 
   } // run Setup
 
@@ -228,9 +228,9 @@ void loop() {
     int errCount;
     errCount=0;
     
-#if ENABLE_MQTT
+    #if ENABLE_MQTT
     mqttConnect();
-#endif
+    #endif
     //mqtt.processPackets(10000);
     // Statemachine
     long now = millis();
@@ -239,9 +239,9 @@ void loop() {
     if(  (now - loopDelay > (modeSleepTimeSec*1000)-PRE_TASK_MSSEC  || loopDelay==0) && state==0  ) {
       Serial.println ("Executing pre tasks...");
 
-#if ENABLE_ONEWIRE  
-      sensors.requestTemperatures();
-#endif
+    #if ENABLE_ONEWIRE  
+    sensors.requestTemperatures();
+    #endif
       state=1;
     }
 
@@ -253,51 +253,51 @@ void loop() {
       float value;
   
 
-#if ENABLE_ONEWIRE
+      #if ENABLE_ONEWIRE
       readOneWireTempMultible(errCount);
-#endif
+      #endif
 
-#if ENABLE_DHT
-      String addressHum;
-      String addressTemp;
-      float valueHum;
-      float valueTemp;
+      #if ENABLE_DHT
+        String addressHum;
+        String addressTemp;
+        float valueHum;
+        float valueTemp;
+  
+        #if ENABLE_MQTT      
+        mqtt.disconnect();
+        #endif
+        
+        readDhtHum(dht, addressHum, valueHum);
+        readDhtTemp(dht,addressTemp, valueTemp);
+  
+        #if ENABLE_MQTT  
+        mqttConnect();
+        publishMqttSensorPayload(sensorTopic, addressHum, valueHum);
+        publishMqttSensorPayload(sensorTopic, addressTemp, valueTemp);
+        #endif
+        #if ENABLE_HTTP
+        publishHttpSensorPayload(errCount, addressHum,valueHum);
+        publishHttpSensorPayload(errCount, addressTemp,valueTemp);
+        #endif
+  
+        dspLine1="T:"+String(valueTemp)+"C";
+        dspLine2="H:"+String(valueHum)+"%";
+        
+        #if ENABLE_DISPLAY
+        printLcd(lcd, 0,0, String(dspLine1), 1);
+        printLcd(lcd, 0,1, String(dspLine2), 0);
+        #endif
+      #endif
 
-#if ENABLE_MQTT      
-      mqtt.disconnect();
-#endif
-      readDhtHum(dht, addressHum, valueHum);
-      readDhtTemp(dht,addressTemp, valueTemp);
-
-#if ENABLE_MQTT  
-      mqttConnect();
-      publishMqttSensorPayload(sensorTopic, addressHum, valueHum);
-      publishMqttSensorPayload(sensorTopic, addressTemp, valueTemp);
-#endif
-#if ENABLE_HTTP
-      publishHttpSensorPayload(errCount, addressHum,valueHum);
-      publishHttpSensorPayload(errCount, addressTemp,valueTemp);
-#endif
-
-      dspLine1="T:"+String(valueTemp)+"C";
-      dspLine2="H:"+String(valueHum)+"%";
-      
-#if ENABLE_DISPLAY
-      printLcd(lcd, 0,0, String(dspLine1), 1);
-      printLcd(lcd, 0,1, String(dspLine2), 0);
-#endif
-
-#endif
-
-#if ENABLE_LIGHTNESS
+      #if ENABLE_LIGHTNESS
       readLightness(address, value);
       publishMqttSensorPayload(sensorTopic, address, value);
-#endif
+      #endif
 
-#if ENABLE_RAINFALL
+      #if ENABLE_RAINFALL
       readRainfall(address, value);
       publishMqttSensorPayload(sensorTopic, address, value);
-#endif
+      #endif
 
       // start
 //      http.begin(readConfigValue("restapiurl")+"data/iot_sensor/WOHNTEMP01");
@@ -474,13 +474,13 @@ void readOneWireTempMultible(int & errCount) {
 
     dtostrf(temperatureC,7, 3, temperaturenow);  //// convert float to char
 
-#if ENABLE_MQTT
+    #if ENABLE_MQTT
     publishMqttSensorPayload(sensorTopic, address,temperatureC); 
-#endif
+    #endif
 
-#if ENABLE_HTTP
+    #if ENABLE_HTTP
     publishHttpSensorPayload(errCount,address,temperatureC); 
-#endif
+    #endif
     /*
     payload = "{\"temp\":"+String(temperatureC)+", \"address\":\""+String(address)+"\"}";
 
