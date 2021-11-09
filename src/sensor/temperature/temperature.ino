@@ -121,6 +121,7 @@ String restApiUser;
 String restApiPwd;
 
 int state=0; // Status from Statemachine
+int transferFailedCount; // count the number of transfer faileds (http)
 
 void setup() { 
   Serial.begin(115200);
@@ -128,6 +129,7 @@ void setup() {
   restApiUrl=readConfigValue("restapiurl");
   restApiUser=readConfigValue("restapiuser");
   restApiPwd=readConfigValue("restapipwd");
+  transferFailedCount=0;
   
   #if ENABLE_DISPLAY
   lcd.begin(DISPLAY_SDA, DISPLAY_SCL);
@@ -225,6 +227,14 @@ void loop() {
     httpServer.handleClient(); 
     if (runSetup) return;
 
+    if (WiFi.status()!=WL_CONNECTED) {
+      Serial.print("WiFi status: ");
+      Serial.println(WiFi.status());
+      printLcd(lcd, 0,0, "WiFi failed!!!", 1);
+      printLcd(lcd, 0,1, "Reboot in 30sec", 0);
+      reset(30000);   
+    }
+
     int errCount;
     errCount=0;
     
@@ -281,11 +291,11 @@ void loop() {
         #endif
   
         dspLine1="T:"+String(valueTemp)+"C";
-        dspLine2="H:"+String(valueHum)+"%";
+        dspLine2="H:"+String(int(valueHum))+"%";
         
         #if ENABLE_DISPLAY
-        printLcd(lcd, 0,0, String(dspLine1), 1);
-        printLcd(lcd, 0,1, String(dspLine2), 0);
+        printLcd(lcd, 0,0, String(dspLine1)+" "+String(dspLine2), 1);
+        printLcd(lcd, 0,1, "("+String(transferFailedCount)+")", 0);
         #endif
       #endif
 
@@ -299,27 +309,23 @@ void loop() {
       publishMqttSensorPayload(sensorTopic, address, value);
       #endif
 
-      // start
-//      http.begin(readConfigValue("restapiurl")+"data/iot_sensor/WOHNTEMP01");
-//      http.addHeader("restapi-username", readConfigValue("restapiuser"));
-//      http.addHeader("restapi-password", readConfigValue("restapipwd"));
-//      int httpCode=http.GET();
-//      if(httpCode==200) {
-//        dspLine1=http.getString();
-//      } 
-//      http.end();
-//      Serial.print("HTTP Code (get display):");
-//      Serial.println(httpCode);
+      #if ENABLE_HTTP
       getServerCommand(errCount);
-      // end
+      #endif
       
       // in case of http errors rebot the node
-      if(errCount>0) {
-        printLcd(lcd, 0,0, "Transfer error",1);
-        printLcd(lcd, 0,1, "restart the node",0);
+      if(errCount==0){
+        transferFailedCount=0;
+      } else {
+        transferFailedCount=transferFailedCount+errCount;
+      }
+      
+      if(transferFailedCount>15) {
+        printLcd(lcd, 0,0, "Transfer failed",1);
+        printLcd(lcd, 0,1, "max. achieved",0);
         Serial.println("HTTP Errors! I will reboot and try it again.");
         Serial.print("HTTP errors:");
-        Serial.println(errCount);
+        Serial.println(transferFailedCount);
         reset(60000);
       }
 
@@ -330,8 +336,6 @@ void loop() {
     // Postprocess
     if(  (now - loopDelay > (modeSleepTimeSec*1000)+POST_TASK_MSSEC  || loopDelay==0) && state==2  ) {
       Serial.println ("Executing post tasks...");
-
-      
       Serial.println("Post tasks executed");
       
       loopDelay = now;
@@ -350,11 +354,12 @@ void loop() {
 } // function
 
 
+#if ENABLE_MQTT
 void mqttDisplayCallback(char *data, uint16_t len) {
   Serial.print("Hey we're in a onoff callback, the button value is: ");
   Serial.println(data);
 }
-
+#endif
 
 #if ENABLE_DISPLAY
 void printLcd(LiquidCrystal_I2C& lcdDisplay,int column, int row, String text, int clear) {
@@ -735,7 +740,8 @@ void setupWifiSTA(const char* ssid, const char* password, const char* newMacStr,
   parseBytes(newMacStr, '-', newMac, 6, 16);
 
   WiFi.setAutoReconnect(true);
-
+  WiFi.setSleepMode(WIFI_NONE_SLEEP); //new
+  
   if(newMacStr != "") {
     wifi_set_macaddr(0, const_cast<uint8*>(newMac));
     Serial.println("mac address is set");
@@ -869,7 +875,7 @@ void publishHttpSensorPayload(int & errCount, String address, float value) {
     Serial.println(errCount);
   }
   http.end();
-  Serial.println("sensor data published!");
+  Serial.println("====================================");
 
 }
 
