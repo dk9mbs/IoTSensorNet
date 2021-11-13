@@ -13,7 +13,7 @@
 */
 
 #define ENABLE_ONEWIRE true
-#define ENABLE_DHT true
+#define ENABLE_DHT false
 #define ENABLE_LIGHTNESS false
 #define ENABLE_RAINFALL false
 #define ENABLE_DISPLAY true

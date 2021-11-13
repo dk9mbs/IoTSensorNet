@@ -43,6 +43,12 @@
         {% endcall %}
     {% endcall %}
 
+    {% call forms.row_form_group() %}
+        {% call forms.data_select('location_id','Location', data['location_id'], 'iot_location', 'default','%') %}
+        {% endcall %}
+    {% endcall %}
+
+
     {% endcall %}
 
 {% endblock %}
