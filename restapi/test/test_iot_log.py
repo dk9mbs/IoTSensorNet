@@ -75,6 +75,7 @@ class TestPluginExecution(unittest.TestCase):
             <fields>
                 <field name="id" value="9999"/>
                 <field name="name" value="test"/>
+                <field name="status_id" value="10"/>
             </fields>
         </restapi>
         """

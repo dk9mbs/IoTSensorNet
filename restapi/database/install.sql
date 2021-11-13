@@ -3,6 +3,14 @@ DELETE FROM api_event_handler WHERE solution_id=10000;
 
 INSERT IGNORE INTO api_solution(id,name) VALUES (10000, 'IoTSensorNet');
 
+CREATE TABLE IF NOT EXISTS iot_node_status(
+    id int NOT NULL,
+    name varchar(50) NOT NULL,
+    PRIMARY KEY(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+INSERT IGNORE INTO iot_node_status(id, name) VALUES (10,'Active');
+INSERT IGNORE INTO iot_node_status(id, name) VALUES (20,'Disabled');
 
 CREATE TABLE IF NOT EXISTS iot_node (
     id int NOT NULL,
@@ -10,7 +18,9 @@ CREATE TABLE IF NOT EXISTS iot_node (
     last_error_code int NULL,
     ip_address varchar(50) NULL,
     last_heard_on timestamp NULL,
+    status_id int NOT NULL DEFAULT '0',
     PRIMARY KEY(id),
+    FOREIGN KEY(status_id) REFERENCES iot_node_status(id),
     INDEX(name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
@@ -122,6 +132,10 @@ INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,des
     VALUES
     (10006,'iot_node','iot_node','id','int','name',10000);
 
+INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
+    VALUES
+    (10007,'iot_node_status','iot_node_status','id','int','name',10000);
+
 
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
@@ -144,6 +158,9 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
     (10000,10006,0,-1,0,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
+    VALUES
+    (10000,10007,0,-1,0,10000);
 
 
 
@@ -169,6 +186,9 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
     VALUES
     (10001,10006,-1,-1,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
+    VALUES
+    (10001,10007,-1,-1,-1,-1,10000);
 
 
 
@@ -314,6 +334,9 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
         <field name="id" table_alias="l" alias="id"/>
         <field name="name" table_alias="l"/>
         <field name="message" table_alias="l"/>
+        <field name="node_id" table_alias="l"/>
+        <field name="name_name" table_alias="l"/>
+        <field name="ip_address" table_alias="l"/>
         <field name="created_on" table_alias="l"/>
     </select>
 </restapi>');
@@ -346,5 +369,18 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
     <select>
         <field name="id" table_alias="n" alias="id"/>
         <field name="name" table_alias="n"/>
+    </select>
+</restapi>');
+
+
+INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml) VALUES (
+10013,'SELECTVIEW','default',10007,'id',10000,'<restapi type="select">
+    <table name="iot_node_status" alias="n"/>
+    <orderby>
+        <field name="name" alias="n" sort="ASC"/>
+    </orderby>
+    <select>
+        <field name="id" table_alias="n" alias="id"/>
+        <field name="name" table_alias="n" alias="name"/>
     </select>
 </restapi>');

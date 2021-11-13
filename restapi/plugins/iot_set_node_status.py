@@ -37,6 +37,7 @@ def execute(context, plugin_context, params):
         </select>
         <filter>
             <condition field="name" value="{node_name}" operator="="/>
+            <condition field="status_id" value="10" operator="="/>
         </filter>
     </restapi>
     """
@@ -45,7 +46,7 @@ def execute(context, plugin_context, params):
     print(rs.get_result())
     if rs.get_eof():
         _add_log_item(context, "Node not found", f"Node {node_name} not registered in iot_node or deactivated",node_name, 100)
-        raise Exception(f"Node not registered: {node_name}")
+        raise Exception(f"Node not registered or deactivated: {node_name}")
 
     node_id=rs.get_result()['id']
     rs.close()
