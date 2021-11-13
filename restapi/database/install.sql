@@ -335,7 +335,7 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
         <field name="name" table_alias="l"/>
         <field name="message" table_alias="l"/>
         <field name="node_id" table_alias="l"/>
-        <field name="name_name" table_alias="l"/>
+        <field name="node_name" table_alias="l"/>
         <field name="ip_address" table_alias="l"/>
         <field name="created_on" table_alias="l"/>
     </select>
