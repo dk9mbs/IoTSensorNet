@@ -3,6 +3,7 @@
 
 #include <DallasTemperature.h>
 
+const String lastErrorFileName="/lasterr.txt";
 
 String readConfigValue(String name) {
   String result="";
@@ -72,4 +73,41 @@ String deviceAddress2String(DeviceAddress deviceAddress){
   }
   addr.toUpperCase();
   return addr;
+}
+
+/*
+ * errCode:
+ * 0=Cleared error
+ * 1=WiFi
+ * 2=HTTP transfer error
+ */
+void saveLastErrorCode(int errCode) {
+  File f = SPIFFS.open(lastErrorFileName,"w");
+  f.print(errCode);
+  f.close();
+}
+
+void clearLastErrorCode() {
+  if (SPIFFS.exists(lastErrorFileName)) {
+    File f = SPIFFS.open(lastErrorFileName,"r");
+    f.print("0");
+    f.close();  
+  }
+}
+
+int getLastErrorCode() {
+  String result;
+  
+  if (!SPIFFS.exists(lastErrorFileName)) {
+    return 0;
+  } else {
+    File f = SPIFFS.open(lastErrorFileName,"r");
+    result=f.readString();
+    f.close();  
+  }
+
+  result.replace("\n", "");
+  result.replace("\r", "");
+  result.replace("\t", "");
+  return result.toInt();
 }

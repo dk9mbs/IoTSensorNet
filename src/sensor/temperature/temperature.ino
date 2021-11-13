@@ -119,6 +119,7 @@ String dspLine2;
 String restApiUrl;
 String restApiUser;
 String restApiPwd;
+String nodeName;
 
 int state=0; // Status from Statemachine
 int transferFailedCount; // count the number of transfer faileds (http)
@@ -129,6 +130,7 @@ void setup() {
   restApiUrl=readConfigValue("restapiurl");
   restApiUser=readConfigValue("restapiuser");
   restApiPwd=readConfigValue("restapipwd");
+  nodeName=readConfigValue("hotname");
   transferFailedCount=0;
   
   #if ENABLE_DISPLAY
@@ -207,10 +209,13 @@ void setup() {
     #endif
 
     int errCount;
+    int httpCode;
     errCount=0;
-    serverLog(errCount, readConfigValue("hostname"), "Node started.");
+    httpCode=0;
+    
+    serverLog(errCount,httpCode, readConfigValue("hostname"), "Node started.");
     if(errCount>0) {
-      printLcd(lcd, 0,0, "Log error",1);
+      printLcd(lcd, 0,0, "Log error ("+String(httpCode)+")",1);
       printLcd(lcd, 0,1, "restart the node",0);
       reset(60000);
     }
@@ -228,6 +233,7 @@ void loop() {
     if (runSetup) return;
 
     if (WiFi.status()!=WL_CONNECTED) {
+      saveLastErrorCode(1);
       Serial.print("WiFi status: ");
       Serial.println(WiFi.status());
       printLcd(lcd, 0,0, "WiFi failed!!!", 1);
@@ -241,6 +247,7 @@ void loop() {
     #if ENABLE_MQTT
     mqttConnect();
     #endif
+    
     //mqtt.processPackets(10000);
     // Statemachine
     long now = millis();
@@ -267,46 +274,58 @@ void loop() {
       readOneWireTempMultible(errCount);
       #endif
 
+      #if ENABLE_MQTT  
+      //mqtt.disconnect();
+      //mqttConnect();
+      #endif
+
       #if ENABLE_DHT
-        String addressHum;
-        String addressTemp;
-        float valueHum;
-        float valueTemp;
-  
-        #if ENABLE_MQTT      
-        mqtt.disconnect();
-        #endif
-        
-        readDhtHum(dht, addressHum, valueHum);
-        readDhtTemp(dht,addressTemp, valueTemp);
-  
-        #if ENABLE_MQTT  
-        mqttConnect();
-        publishMqttSensorPayload(sensorTopic, addressHum, valueHum);
-        publishMqttSensorPayload(sensorTopic, addressTemp, valueTemp);
-        #endif
-        #if ENABLE_HTTP
-        publishHttpSensorPayload(errCount, addressHum,valueHum);
-        publishHttpSensorPayload(errCount, addressTemp,valueTemp);
-        #endif
-  
-        dspLine1="T:"+String(valueTemp)+"C";
-        dspLine2="H:"+String(int(valueHum))+"%";
-        
-        #if ENABLE_DISPLAY
-        printLcd(lcd, 0,0, String(dspLine1)+" "+String(dspLine2), 1);
-        printLcd(lcd, 0,1, "("+String(transferFailedCount)+")", 0);
-        #endif
+      String addressHum;
+      String addressTemp;
+      float valueHum;
+      float valueTemp;
+
+      readDhtHum(dht, addressHum, valueHum);
+      readDhtTemp(dht,addressTemp, valueTemp);
+
+      #if ENABLE_MQTT  
+      publishMqttSensorPayload(sensorTopic, addressHum, valueHum);
+      publishMqttSensorPayload(sensorTopic, addressTemp, valueTemp);
+      #endif
+      #if ENABLE_HTTP
+      publishHttpSensorPayload(errCount, addressHum,valueHum);
+      publishHttpSensorPayload(errCount, addressTemp,valueTemp);
+      #endif
+
+      dspLine1="T:"+String(valueTemp)+"C";
+      dspLine2="H:"+String(int(valueHum))+"%";
+      
+      #if ENABLE_DISPLAY
+      printLcd(lcd, 0,0, String(dspLine1)+" "+String(dspLine2), 1);
+      printLcd(lcd, 0,1, "("+String(transferFailedCount)+")", 0);
+      #endif
       #endif
 
       #if ENABLE_LIGHTNESS
-      readLightness(address, value);
-      publishMqttSensorPayload(sensorTopic, address, value);
+        readLightness(address, value);
+        #if ENABLE_MQTT
+        publishMqttSensorPayload(sensorTopic, address, value);
+        #endif
+  
+        #if ENABLE_HTTP
+        publishMqttSensorPayload(errCount, address, value);
+        #endif
       #endif
 
       #if ENABLE_RAINFALL
-      readRainfall(address, value);
-      publishMqttSensorPayload(sensorTopic, address, value);
+        readRainfall(address, value);
+        #if ENABLE_MQTT
+        publishMqttSensorPayload(sensorTopic, address, value);
+        #endif
+  
+        #if ENABLE_HTTP
+        publishMqttSensorPayload(errCount, address, value);
+        #endif
       #endif
 
       #if ENABLE_HTTP
@@ -317,10 +336,11 @@ void loop() {
       if(errCount==0){
         transferFailedCount=0;
       } else {
-        transferFailedCount=transferFailedCount+errCount;
+        transferFailedCount++;
       }
       
-      if(transferFailedCount>15) {
+      if(transferFailedCount>5) {
+        saveLastErrorCode(2);
         printLcd(lcd, 0,0, "Transfer failed",1);
         printLcd(lcd, 0,1, "max. achieved",0);
         Serial.println("HTTP Errors! I will reboot and try it again.");
@@ -486,15 +506,6 @@ void readOneWireTempMultible(int & errCount) {
     #if ENABLE_HTTP
     publishHttpSensorPayload(errCount,address,temperatureC); 
     #endif
-    /*
-    payload = "{\"temp\":"+String(temperatureC)+", \"address\":\""+String(address)+"\"}";
-
-    if (! sensorTopic.publish(payload.c_str())) {
-      Serial.println(F("Failed"));
-    } else {
-      Serial.println(F("OK!"));
-    }
-    */
   }
 }
 #endif
@@ -835,18 +846,22 @@ void reset(int msDelay) {
   while (1);
 }
 
-void serverLog(int & errCount, String node, String message) {
+#if ENABLE_HTTP
+void serverLog(int & errCount, int & httpCode, String node, String message) {
+  int lastErrorCode=getLastErrorCode();
+  
   http.begin(readConfigValue("restapiurl")+"data/iot_log");
   http.addHeader("username", readConfigValue("restapiuser"));
   http.addHeader("password", readConfigValue("restapipwd"));
   http.addHeader("Content-Type", "application/json");
-  
-  int httpCode=http.POST( "{\"name\": \""+node+"\", \"message\": \""+message+"\", \"source_id\":\"1\" }"   );
+
+  httpCode=http.POST("{\"name\": \""+node+"\", \"message\": \""+message+"\", \"source_id\":\"1\", \"node_name\": \""+node+"\",\"ip_address\":\""+WiFi.localIP().toString()+"\" }");
 
   if(httpCode==200) {
+    clearLastErrorCode();
     Serial.println("Log sended");
   } else {
-    Serial.println("cannot send logdata!!!"); 
+    Serial.println("!cannot send logdata:"+String(httpCode)); 
     errCount++;
   }
   http.end();
@@ -879,19 +894,21 @@ void publishHttpSensorPayload(int & errCount, String address, float value) {
 
 }
 
-void getServerCommand(int & errCount) {
-      // start
-      http.begin(restApiUrl+"data/iot_sensor/WOHNTEMP01");
-      http.addHeader("restapi-username", restApiUser);
-      http.addHeader("restapi-password", restApiPwd);
-      int httpCode=http.GET();
-      if(httpCode==200) {
-        dspLine1=http.getString();
-      } else {
-        errCount++; 
-      }
-      http.end();
-      Serial.print("HTTP Code (get display):");
-      Serial.println(httpCode);
-      // end
+String getServerCommand(int & errCount) {
+    // start
+    http.begin(restApiUrl+"data/iot_sensor/WOHNTEMP01");
+    http.addHeader("restapi-username", restApiUser);
+    http.addHeader("restapi-password", restApiPwd);
+    int httpCode=http.GET();
+    if(httpCode==200) {
+      //dspLine1=http.getString();
+      return "";
+    } else {
+      errCount++; 
+    }
+    http.end();
+    Serial.print("HTTP Code (get display):");
+    Serial.println(httpCode);
+    // end
 }
+#endif
