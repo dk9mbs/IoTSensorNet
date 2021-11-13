@@ -13,7 +13,7 @@ INSERT IGNORE INTO iot_node_status(id, name) VALUES (10,'Active');
 INSERT IGNORE INTO iot_node_status(id, name) VALUES (20,'Disabled');
 
 CREATE TABLE IF NOT EXISTS iot_node (
-    id int NOT NULL,
+    id int NOT NULL AUTO_INCREMENT,
     name varchar(250) NOT NULL,
     last_error_code int NULL,
     ip_address varchar(50) NULL,
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS iot_node (
     status_id int NOT NULL DEFAULT '0',
     PRIMARY KEY(id),
     FOREIGN KEY(status_id) REFERENCES iot_node_status(id),
-    INDEX(name)
+    UNIQUE KEY(name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 
@@ -351,12 +351,17 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
     <orderby>
         <field name="name" alias="n" sort="ASC"/>
     </orderby>
+    <joins>
+        <join type="inner" table="iot_node_status" alias="ns" condition="n.status_id=ns.id"/>
+    </joins>
     <select>
-        <field name="id" table_alias="n" alias="id"/>
-        <field name="name" table_alias="n"/>
-        <field name="ip_address" table_alias="n"/>
-        <field name="last_heard_on" table_alias="n"/>
-        <field name="last_error_code" table_alias="n"/>
+        <field name="id" table_alias="n" alias="id" header="ID"/>
+        <field name="name" table_alias="n" alias="test" header="Node Name"/>
+        <field name="ip_address" table_alias="n" header="IP"/>
+        <field name="last_heard_on" table_alias="n" header="Last heard"/>
+        <field name="last_error_code" table_alias="n" header="Last Error"/>
+        <field name="name" table_alias="ns" header="Status"/>
+        <field name="status_id" table_alias="n" header="StatusID"/>
     </select>
 </restapi>');
 
