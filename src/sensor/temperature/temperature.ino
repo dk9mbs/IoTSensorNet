@@ -253,14 +253,8 @@ void loop() {
       String address;
       float value;
   
-
       #if ENABLE_ONEWIRE
       readOneWireTempMultible(errCount);
-      #endif
-
-      #if ENABLE_MQTT  
-      //mqtt.disconnect();
-      //mqttConnect();
       #endif
 
       #if ENABLE_DHT
@@ -271,16 +265,31 @@ void loop() {
 
       readDhtHum(dht, addressHum, valueHum);
       readDhtTemp(dht,addressTemp, valueTemp);
+      
+      if (!isnan(valueHum)) {
+        #if ENABLE_MQTT  
+        publishMqttSensorPayload(sensorTopic, addressHum, valueHum);
+        #endif
 
-      #if ENABLE_MQTT  
-      publishMqttSensorPayload(sensorTopic, addressHum, valueHum);
-      publishMqttSensorPayload(sensorTopic, addressTemp, valueTemp);
-      #endif
-      #if ENABLE_HTTP
-      publishHttpSensorPayload(errCount, addressHum,valueHum);
-      publishHttpSensorPayload(errCount, addressTemp,valueTemp);
-      #endif
+        #if ENABLE_HTTP
+        publishHttpSensorPayload(errCount, addressHum,valueHum);
+        #endif    
+      } else {
+        Serial.println("!Cannot read DHT Hum data");
+      }
 
+      if (!isnan(valueTemp)) {
+        #if ENABLE_MQTT  
+        publishMqttSensorPayload(sensorTopic, addressTemp, valueTemp);
+        #endif
+
+        #if ENABLE_HTTP
+        publishHttpSensorPayload(errCount, addressHum,valueTemp);
+        #endif    
+      } else {
+        Serial.println("!Cannot read DHT Temp data");
+      }
+      
       dspLine1="T:"+String(valueTemp)+"C";
       dspLine2="H:"+String(int(valueHum))+"%";
       
@@ -432,6 +441,7 @@ void readDhtTemp(DHT& dht, String& address, float& temperature) {
   Serial.println("reading the DHT sensor");
   address=createIoTDeviceAddress("tempc");
   temperature = dht.readTemperature();
+  //Serial.print(dht.getStatusString());
 
   Serial.print("Temperature:");
   Serial.print(temperature);
