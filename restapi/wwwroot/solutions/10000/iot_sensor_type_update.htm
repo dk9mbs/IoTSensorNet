@@ -1,0 +1,34 @@
+{% extends "templates/base/base.htm" %}
+{% import "templates/base/uitools.htm" as forms %}
+
+
+
+{% block title %}TuxLog{% endblock %}
+
+{% block head %}
+    {{ super() }}
+{% endblock %}
+
+{% block content %}
+
+    {% call forms.record_form( table, id ) %}
+
+    {% call forms.row() %}
+        {% call forms.input('id', 'ID', 'ID', data['id'], disabled=True ) %}
+        {% endcall %}
+    {% endcall %}
+
+    {% call forms.row() %}
+        {% call forms.input('name', 'Name', '', data['name'] ) %}
+        {% endcall %}
+    {% endcall %}
+
+
+
+    {% endcall %}
+
+{% endblock %}
+
+
+
+

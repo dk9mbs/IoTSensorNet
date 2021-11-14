@@ -64,6 +64,12 @@
     {% endcall %}
 
 
+    {% call forms.row_form_group() %}
+        {% call forms.data_select('type_id','Type', data['type_id'], 'iot_sensor_type', 'default','%') %}
+        {% endcall %}
+    {% endcall %}
+
+
     {% endcall %}
 
 {% endblock %}
