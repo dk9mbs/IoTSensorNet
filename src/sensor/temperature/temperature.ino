@@ -11,13 +11,12 @@
  * ToDo:
  * Mac Address in setupFileSystem: : replace : with -
 */
-
+const String nodeVersion="v1.1";
 #define ENABLE_ONEWIRE true
-#define ENABLE_DHT false
+#define ENABLE_DHT true
 #define ENABLE_LIGHTNESS false
 #define ENABLE_RAINFALL false
 #define ENABLE_DISPLAY true
-#define ENABLE_UDP false
 #define ENABLE_MQTT false
 #define ENABLE_HTTP true
 
@@ -28,11 +27,6 @@
 
 #include "dk9mbs_tools.h"
 #include <ESP8266WiFi.h>
-
-#if ENABLE_UDP
-#include <WiFiUdp.h>
-#endif
-
 #include <FS.h>
 
 #if ENABLE_ONEWIRE
@@ -77,10 +71,6 @@ DallasTemperature sensors(&oneWire);
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 #endif
 
-#if ENABLE_UDP
-WiFiUDP udp;
-#endif
-
 WiFiClient espClient;
 ESP8266WebServer httpServer(80);
 HTTPClient http;
@@ -107,9 +97,6 @@ long lastMsg = 0;
 char msg[50];
 int value = 0;
 int modeSleepTimeSec=60;
-#if ENABLE_UDP
-char packetBuffer[UDP_TX_PACKET_MAX_SIZE + 1];
-#endif
 boolean modeDeepSleep=false;
 boolean runSetup=false;
 long loopDelay=0;
@@ -136,7 +123,8 @@ void setup() {
   #if ENABLE_DISPLAY
   lcd.begin(DISPLAY_SDA, DISPLAY_SCL);
   lcd.setCursor(0, 0); // Spalte, Zeile
-  printLcd(lcd, 0,1, "booting ...",1);
+  printLcd(lcd, 0,0, "booting ...",1);
+  printLcd(lcd, 0,1, "Version "+nodeVersion,0);
   delay (1000);
   #endif
 
@@ -165,7 +153,8 @@ void setup() {
     return;
   } else {
     #if ENABLE_DISPLAY
-    printLcd(lcd, 0,1, "setup hw ...",1);
+    printLcd(lcd, 0,0, "connecting WLAN",1);
+    printLcd(lcd, 0,1, "Version "+nodeVersion,0);
     #endif
     
     setupHttpAdmin();
@@ -201,12 +190,6 @@ void setup() {
     #endif
 
     delay(500);
-
-    #if ENABLE_UDP    
-    unsigned int localPort=3333;
-    udp.begin(localPort);
-    delay(100);
-    #endif
 
     int errCount;
     int httpCode;
@@ -256,9 +239,10 @@ void loop() {
     if(  (now - loopDelay > (modeSleepTimeSec*1000)-PRE_TASK_MSSEC  || loopDelay==0) && state==0  ) {
       Serial.println ("Executing pre tasks...");
 
-    #if ENABLE_ONEWIRE  
-    sensors.requestTemperatures();
-    #endif
+      #if ENABLE_ONEWIRE  
+      sensors.requestTemperatures();
+      #endif
+
       state=1;
     }
 
@@ -356,10 +340,11 @@ void loop() {
     // Postprocess
     if(  (now - loopDelay > (modeSleepTimeSec*1000)+POST_TASK_MSSEC  || loopDelay==0) && state==2  ) {
       Serial.println ("Executing post tasks...");
-      Serial.println("Post tasks executed");
       
       loopDelay = now;
       state=0;
+
+      Serial.println("Post tasks executed");
     }
     //
     // End Statemachine
@@ -412,14 +397,8 @@ void readRainfall(String& address, float& value) {
 
 #if ENABLE_MQTT
 void publishMqttSensorPayload(Adafruit_MQTT_Publish& topic, String address, float value) {
-  //strcpy(topic, readConfigValue("pubtopic").c_str());
-  //Serial.print("Pubtopic: ");
-  //Serial.println(topic);
-  //Adafruit_MQTT_Publish sensorTopic = Adafruit_MQTT_Publish(&mqtt, topic);
-
   String payload="";
   payload = "{\"value\":"+String(value)+", \"address\":\""+address+"\"}";
-  //sensorTopic.publish(payload.c_str());
   topic.publish(payload.c_str());
 }
 #endif
@@ -456,8 +435,7 @@ void readDhtTemp(DHT& dht, String& address, float& temperature) {
 
   Serial.print("Temperature:");
   Serial.print(temperature);
-  Serial.println("°C");
-  
+  Serial.println("°C");  
 }
 
 #endif
@@ -479,10 +457,6 @@ void readLightness(String& address, float& lux) {
 void readOneWireTempMultible(int & errCount) {
   Serial.println("reading the onewire sensors...");
 
-  //sensors.requestTemperatures();
-  //delay(500);
-   
-  //int numberOfSensors=sensors.getDS18Count();
   int numberOfSensors=sensors.getDeviceCount();
   float temperatureC;
   DeviceAddress mac;
@@ -527,17 +501,12 @@ void mqttConnect() {
   int mqttPort;
   String clientId=readConfigValue("hostname");
   
-  if(staticBroker=="") {
-    String clientInfo=String(sendConfigRequestandWaitForResponse("WHOISMQTTBROKER"));
-    Serial.print("Clientinfo from udp client service:");
-    Serial.println(clientInfo);
-    String udpTopic=split(clientInfo,';',0);
-    mqttBroker=split(clientInfo,';',1);
-    mqttPort=split(clientInfo,';',2).toInt();
-  } else {
+  if(staticBroker!="") {
     Serial.println("use static mqtt broker address!");
     mqttBroker=staticBroker;
     mqttPort=readConfigValue("staticbrokerport").toInt();
+  } else {
+    Serial.println("!Pse enter a valid broker address!");
   }
 
 
@@ -572,6 +541,7 @@ void mqttConnect() {
 void setupHttpAdmin() {
   httpServer.on("/",handleHttpSetup);
   httpServer.on("/api",handleHttpApi);
+  httpServer.on("/version",handleHttpVersion);
   httpServer.onNotFound(handleHttp404);
   httpServer.begin();
 }
@@ -579,6 +549,11 @@ void setupHttpAdmin() {
 void handleHttpApi() {
   httpServer.send(200, "text/html", "api"); 
 }
+
+void handleHttpVersion() {
+  httpServer.send(200, "text/html", "{\"version\": \""+nodeVersion+"\"}"); 
+}
+
 void handleHttpSetup() {
     String pwd = readConfigValue("adminpwd");
     if (!httpServer.authenticate("admin", pwd.c_str())) {
@@ -630,8 +605,8 @@ void handleHttpSetup() {
     "</P>"
     "</P>"
     "<P>MQTT Broker"
-    "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Static mqtt broker address (if empty then dynamic)</div><INPUT style=\"width:99%;\" type=\"text\" name=\"STATICBROKERADDR\" value=\""+ readConfigValue("staticbrokeraddr") +"\"></div>"
-    "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Static mqtt broker port</div><INPUT style=\"width:99%;\" type=\"text\" name=\"STATICBROKERPORT\" value=\""+ readConfigValue("staticbrokerport") +"\"></div>"
+    "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>MQTT broker address</div><INPUT style=\"width:99%;\" type=\"text\" name=\"STATICBROKERADDR\" value=\""+ readConfigValue("staticbrokeraddr") +"\"></div>"
+    "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>MQTT broker port</div><INPUT style=\"width:99%;\" type=\"text\" name=\"STATICBROKERPORT\" value=\""+ readConfigValue("staticbrokerport") +"\"></div>"
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Username</div><INPUT style=\"width:99%;\" type=\"text\" name=\"BROKERUSER\" value=\""+ readConfigValue("brokeruser") +"\"></div>"
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Password</div><INPUT style=\"width:99%;\" type=\"text\" name=\"BROKERPWD\" value=\""+ readConfigValue("brokerpwd") +"\"></div>"
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>Publish topic</div><INPUT disabled maxlength=\"50\" style=\"width:99%;\" type=\"text\" name=\"PUBTOPIC\" value=\""+ MQTT_PUB_TOPIC +"\"></div>"
@@ -793,52 +768,6 @@ void setupWifiSTA(const char* ssid, const char* password, const char* newMacStr,
 
 }
 
-
-
-#if ENABLE_UDP
-void sendUdp(const char* msg, unsigned int port,const char* broadcast, WiFiUDP udp) {
-  Serial.print("Sending udp:");
-  Serial.println(msg);
-  //const char* broadcast=broadcastAddress;
-  int beginResult;
-  int endResult;
-  beginResult=udp.beginPacket(broadcast, port);
-  if(!beginResult) Serial.println("Error begin package!!!");
-  udp.write(msg);
-  endResult=udp.endPacket();
-  if(!endResult) Serial.println("Error end package!!!");
-}
-#endif
-
-
-#if ENABLE_UDP
-String sendConfigRequestandWaitForResponse(String request) {
-  int packetSize=0;
-  unsigned int port=1200;
-  int ttl=10;
-  int timeout=ttl;
-
-  sendUdp(request.c_str(), port, broadcastAddress, udp);
-
-  while(!packetSize) {
-    packetSize = udp.parsePacket();
-    Serial.print(".");
-    delay(500);
-    timeout--;
-    if (timeout==0) {
-      Serial.println("timeout arrived ... try to send new request ...");
-      timeout=ttl;
-      sendUdp(request.c_str(), port, broadcastAddress, udp);
-    }
-
-  }
-
-  int n = udp.read(packetBuffer, UDP_TX_PACKET_MAX_SIZE);
-  packetBuffer[n] = 0;
-  return String(packetBuffer);
-
-}
-#endif
 
 void reset(int msDelay) {
   delay(msDelay);
