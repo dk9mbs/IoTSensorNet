@@ -262,11 +262,11 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
     </joins>
     <select>
         <field name="id" table_alias="s" alias="id" header="ID"/>
+        <field name="name" table_alias="st" header="Type"/>
         <field name="description" table_alias="s" header="Description"/>
         <field name="last_value" table_alias="s" header="Value (current)"/>
         <field name="unit" table_alias="s" header="Unit"/>
         <field name="last_value_on" table_alias="s" header="Last value on"/>
-        <field name="name" table_alias="st" header="Type"/>
     </select>
 </restapi>');
 
