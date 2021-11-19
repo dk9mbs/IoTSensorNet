@@ -41,6 +41,7 @@ def execute(context, plugin_context, params):
 
     else:
         if rs.get_result()['status_id']==20:
+            _add_log_item(context, "Sensor disabled", f"External_sensor_id: {external_sensor_id} was disabled",100)
             raise Exception(f"External Sensor {external_sensor_id} is disabled!!!")
 
         internal_sensor_id=rs.get_result()['internal_sensor_id']
@@ -51,6 +52,7 @@ def execute(context, plugin_context, params):
     logger.info(f"external_sensor_id: {external_sensor_id} internal_sensor_id: {internal_sensor_id}")
 
     if internal_sensor_id==None or internal_sensor_id=="":
+        _add_log_item(context, "Sensor not routed", f"No routing found for external_sensor_id: {external_sensor_id} ",100)
         raise Exception(f"Sensor not registered: {external_sensor_id}")
 
     params['data']['sensor_id']['value']=internal_sensor_id
@@ -121,4 +123,19 @@ def __set_last_value_on(context,external_sensor_id):
 
     fetchparser=FetchXmlParser(fetch, context)
     rs=DatabaseServices.exec(fetchparser, context, run_as_system=True)
+
+
+def _add_log_item(context,name, message, source_id):
+    fetch=f"""
+    <restapi type="insert">
+        <table name="iot_log"/>
+        <fields>
+            <field name="source_id" value="{source_id}"/>
+            <field name="name" value="{name}"/>
+            <field name="message" value="{message}"/>
+        </fields>
+    </restapi>
+    """
+    fetchparser=FetchXmlParser(fetch, context)
+    DatabaseServices.exec(fetchparser, context, run_as_system=True)
 

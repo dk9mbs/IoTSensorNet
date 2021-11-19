@@ -55,6 +55,10 @@ class TestPluginExecution(unittest.TestCase):
         last_value=self.__read_last_value(sensor3)
         self.assertEqual(last_value, value3)
 
+        try:
+            self.__insert_sensor_data("sensor_not_exists", value1)
+        except Exception as err:
+            print(f"!!!!!!!!!!!:{err}") 
 
 
     def __read_last_value(self, sensor_id):
