@@ -794,7 +794,7 @@ void serverLog(int & errCount, int & httpCode, String node, String message) {
   http.addHeader("password", readConfigValue("restapipwd"));
   http.addHeader("Content-Type", "application/json");
 
-  httpCode=http.POST("{\"name\": \""+node+"\", \"message\": \""+message+"\", \"source_id\":\"1\", \"node_name\": \""+node+"\",\"ip_address\":\""+WiFi.localIP().toString()+"\" }");
+  httpCode=http.POST("{\"name\": \""+node+"\", \"message\": \""+message+" ("+String(getLastErrorCode())+")\", \"source_id\":\"1\", \"node_name\": \""+node+"\",\"ip_address\":\""+WiFi.localIP().toString()+"\" }");
 
   if(httpCode==200) {
     clearLastErrorCode();
@@ -834,6 +834,7 @@ void publishHttpSensorPayload(int & errCount, String address, float value) {
 }
 
 String getServerCommand(int & errCount) {
+    return "";
     // start
     http.begin(restApiUrl+"data/iot_sensor/WOHNTEMP01");
     http.addHeader("restapi-username", restApiUser);

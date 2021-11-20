@@ -89,7 +89,7 @@ void saveLastErrorCode(int errCode) {
 
 void clearLastErrorCode() {
   if (SPIFFS.exists(lastErrorFileName)) {
-    File f = SPIFFS.open(lastErrorFileName,"r");
+    File f = SPIFFS.open(lastErrorFileName,"w");
     f.print("0");
     f.close();  
   }
