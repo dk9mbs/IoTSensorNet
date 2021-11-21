@@ -11,7 +11,7 @@
  * ToDo:
  * Mac Address in setupFileSystem: : replace : with -
 */
-const String nodeVersion="v1.1";
+const String nodeVersion="v1.2";
 #define ENABLE_ONEWIRE true
 #define ENABLE_DHT true
 #define ENABLE_LIGHTNESS false
@@ -59,7 +59,7 @@ const String nodeVersion="v1.1";
 #define MQTT_PUB_TOPIC "temp/sensor"
 #define PRE_TASK_MSSEC 5000
 #define POST_TASK_MSSEC 500
-#define DEBOUNCE_TIME_MS 100 // Entprellzeit digital in
+#define DEBOUNCE_TIME_MS 20 // Entprellzeit digital in
 
 #if ENABLE_ONEWIRE
 OneWire  ds(2); 
@@ -100,8 +100,8 @@ int modeSleepTimeSec=60;
 boolean modeDeepSleep=false;
 boolean runSetup=false;
 long loopDelay=0;
-String dspLine1;
-String dspLine2;
+String dspValue1;
+String dspValue2;
 
 String restApiUrl;
 String restApiUser;
@@ -110,6 +110,12 @@ String nodeName;
 
 int state=0; // Status from Statemachine
 int transferFailedCount; // count the number of transfer faileds (http)
+
+int displayMode=0; //0=DHT11 1=Remote (Push)
+
+long lastKey1ActionMs=0;
+long lastKey1PressedMs=0;
+int key1Status=0; //statemachine 
 
 void setup() { 
   Serial.begin(115200);
@@ -189,6 +195,9 @@ void setup() {
     attachInterrupt(digitalPinToInterrupt(RAINFALL_PIN), rainfallIsr, RISING);
     #endif
 
+    // attach Reset pin isr
+    attachInterrupt(digitalPinToInterrupt(SETUPPIN), buttonIsr, CHANGE);
+
     delay(500);
 
     int errCount;
@@ -203,7 +212,7 @@ void setup() {
       reset(60000);
     }
     #if ENABLE_DISPLAY
-    printLcd(lcd, 0,0, String("Running"), 1);
+    printLcd(lcd, 0,0, String("running ..."), 1);
     #endif
 
   } // run Setup
@@ -232,8 +241,22 @@ void loop() {
     #endif
     
     //mqtt.processPackets(10000);
+
     // Statemachine
     long now = millis();
+
+    // Setup Button
+    int keyPressTime;
+    handleKey(SETUPPIN, lastKey1ActionMs, key1Status, lastKey1PressedMs, keyPressTime);
+    if(keyPressTime>0){
+      Serial.print("Keypress detected:");
+      Serial.println(keyPressTime);
+      if (keyPressTime<1000) handleSettings(displayMode, false);
+      if (keyPressTime>=1000) handleSettings(displayMode, true);
+    }
+    // Setup Button End
+
+
 
     // Pre Process Tasks
     if(  (now - loopDelay > (modeSleepTimeSec*1000)-PRE_TASK_MSSEC  || loopDelay==0) && state==0  ) {
@@ -265,8 +288,13 @@ void loop() {
 
       readDhtHum(dht, addressHum, valueHum);
       readDhtTemp(dht,addressTemp, valueTemp);
+
+      dspValue1="T:--C";
+      dspValue2="H:--%";
       
       if (!isnan(valueHum)) {
+        dspValue1="H:"+String(int(valueHum))+"%";
+
         #if ENABLE_MQTT  
         publishMqttSensorPayload(sensorTopic, addressHum, valueHum);
         #endif
@@ -279,23 +307,25 @@ void loop() {
       }
 
       if (!isnan(valueTemp)) {
+        dspValue2="T:"+String(valueTemp)+"C";
+
         #if ENABLE_MQTT  
         publishMqttSensorPayload(sensorTopic, addressTemp, valueTemp);
         #endif
 
         #if ENABLE_HTTP
-        publishHttpSensorPayload(errCount, addressHum,valueTemp);
+        publishHttpSensorPayload(errCount, addressTemp,valueTemp);
         #endif    
       } else {
         Serial.println("!Cannot read DHT Temp data");
       }
       
-      dspLine1="T:"+String(valueTemp)+"C";
-      dspLine2="H:"+String(int(valueHum))+"%";
       
       #if ENABLE_DISPLAY
-      printLcd(lcd, 0,0, String(dspLine1)+" "+String(dspLine2), 1);
-      printLcd(lcd, 0,1, "("+String(transferFailedCount)+")", 0);
+      if(displayMode==0){
+        printLcd(lcd, 0,0, String(dspValue2)+" "+String(dspValue1), 1);
+        printLcd(lcd, 0,1, "("+String(transferFailedCount)+")", 0);
+      }
       #endif
       #endif
 
@@ -368,6 +398,111 @@ void loop() {
 } // function
 
 
+void handleSettings(int & mode, boolean set) {
+  static int menuStatus=0; //0=Show DHT11 1=Remote Push 2=Reboot 3=ELAN Status 4=Exit 
+
+
+  if(set) {
+    if(menuStatus==0) {
+        printLcd(lcd, 0,0, "EXIT WITHOUT",1);
+        printLcd(lcd, 0,1, "CHANGES.",0);
+    } else if (menuStatus==1) {
+        mode=0; // LOCAL DHT11
+        printLcd(lcd,0,0,"WAITING FOR DHT",1);
+        printLcd(lcd,0,1,"DATA",0);
+    } else if(menuStatus==2) {
+        mode=1; //Remote PUSH
+        printLcd(lcd,0,0,"WAITING FOR PUSH",1);
+        printLcd(lcd,0,1,"DATA",0);
+    } else if (menuStatus==3){
+        printLcd(lcd,0,0,"rebooting ...",1);
+      ESP.reset();
+    } else if (menuStatus==4) {
+        printLcd(lcd, 0,0, "WLAN Status:",1);
+        printLcd(lcd, 0,1, String(WiFi.status()),0);
+    } else if (menuStatus==5) {
+        printLcd(lcd, 0,0, "VERSION",1);
+        printLcd(lcd, 0,1, String(nodeVersion),0);
+    } else if (menuStatus==6) {
+        printLcd(lcd, 0,0, "starting task ...",1);
+        loopDelay=0;        
+    }
+    return;
+  }
+  
+  menuStatus++;
+  if (menuStatus>6) menuStatus=0;
+
+  if( menuStatus==0) {
+      printLcd(lcd, 0,0, "EXIT",1);
+  } else if (menuStatus==1) {
+    printLcd(lcd, 0,0, "LOCAL DHT11",1);
+  } else if(menuStatus==2) {
+      printLcd(lcd, 0,0, "REMOTE PUSH",1);
+  } else if (menuStatus==3){
+      printLcd(lcd, 0,0, "REBOOT",1);
+  } else if (menuStatus==4){
+      printLcd(lcd, 0,0, "WLAN STATUS",1);
+  } else if (menuStatus==5) {
+      printLcd(lcd, 0,0, "VERSION",1);
+  } else if (menuStatus==6) {
+      printLcd(lcd, 0,0, "RUN TASK",1);
+  }
+}
+
+void handleKey(int key, long & lastToggleActionMs, int & status, long & lastPressedMs, int & keyPressTime) {
+  /*
+   * status:
+   * 0= start
+   * 10=in debonce after keypress
+   * 20=in keypress mode 
+   * 30=wait for release
+   * 40=in debonce after release the key
+   */
+  long now=millis();
+  keyPressTime=0;
+  
+  // switch first pressed
+  if(!digitalRead(key) && status==0 ) {
+    status=10;
+    lastToggleActionMs=now;
+  }
+
+  // in debounce time do nothing (pressed)
+  if (now-lastToggleActionMs>DEBOUNCE_TIME_MS && status==10) {
+    status=20;
+    lastPressedMs=millis();
+  }
+
+
+  // after debounce of keypress
+  if (status==20) {
+    /*
+     * Do some stuff after press the key (run once)
+     * 
+     */
+    status=30;
+  }
+
+
+  // wait for release the button; next go in debonce
+  if(status==30 && digitalRead(key)) {
+    lastToggleActionMs=millis();
+    status=40;
+  }
+
+  // after debounce time (release the key)
+  if (now-lastToggleActionMs>DEBOUNCE_TIME_MS && status==40) {
+    status=0;
+    /*
+     * Do some stuff after release the key
+     */
+    keyPressTime=millis()-lastPressedMs;
+  }
+
+  
+}
+
 #if ENABLE_MQTT
 void mqttDisplayCallback(char *data, uint16_t len) {
   Serial.print("Hey we're in a onoff callback, the button value is: ");
@@ -383,6 +518,10 @@ void printLcd(LiquidCrystal_I2C& lcdDisplay,int column, int row, String text, in
   lcdDisplay.print(text);
 }
 #endif
+
+ICACHE_RAM_ATTR void buttonIsr() {
+    
+}
 
 #if ENABLE_RAINFALL
 ICACHE_RAM_ATTR void rainfallIsr() {
@@ -552,6 +691,7 @@ void setupHttpAdmin() {
   httpServer.on("/",handleHttpSetup);
   httpServer.on("/api",handleHttpApi);
   httpServer.on("/version",handleHttpVersion);
+  httpServer.on("/setdisplay",handleHttpSetDisplay);
   httpServer.onNotFound(handleHttp404);
   httpServer.begin();
 }
@@ -562,6 +702,22 @@ void handleHttpApi() {
 
 void handleHttpVersion() {
   httpServer.send(200, "text/html", "{\"version\": \""+nodeVersion+"\"}"); 
+}
+
+void handleHttpSetDisplay() {
+  if(httpServer.hasArg("line1")) {
+      printLcd(lcd, 0,0, httpServer.arg("line1"),1);
+  } else {
+      printLcd(lcd, 0,0, "NO DATA",1);
+  }
+
+  if(httpServer.hasArg("line2")) {
+      printLcd(lcd, 0,1, httpServer.arg("line2"),0);
+  } else {
+      printLcd(lcd, 0,1, "** dk9mbs.de **",0);
+  }
+
+  httpServer.send(200, "text/html", "{\"result\": \"OK\"}"); 
 }
 
 void handleHttpSetup() {
