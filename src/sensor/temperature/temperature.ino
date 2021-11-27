@@ -11,7 +11,7 @@
  * ToDo:
  * Mac Address in setupFileSystem: : replace : with -
 */
-const String nodeVersion="v1.2";
+const String nodeVersion="v1.3";
 #define ENABLE_ONEWIRE true
 #define ENABLE_DHT true
 #define ENABLE_LIGHTNESS false
@@ -120,10 +120,10 @@ int key1Status=0; //statemachine
 void setup() { 
   Serial.begin(115200);
 
-  restApiUrl=readConfigValue("restapiurl");
-  restApiUser=readConfigValue("restapiuser");
-  restApiPwd=readConfigValue("restapipwd");
-  nodeName=readConfigValue("hotname");
+  //restApiUrl=readConfigValue("restapiurl");
+  //restApiUser=readConfigValue("restapiuser");
+  //restApiPwd=readConfigValue("restapipwd");
+  //nodeName=readConfigValue("hotname");
   transferFailedCount=0;
   
   #if ENABLE_DISPLAY
@@ -140,6 +140,7 @@ void setup() {
   restApiUrl=readConfigValue("restapiurl");
   restApiUser=readConfigValue("restapiuser");
   restApiPwd=readConfigValue("restapipwd");
+  nodeName=readConfigValue("hostname");
   Serial.println(restApiUrl);
   Serial.println(restApiUser);
 
@@ -352,7 +353,9 @@ void loop() {
       #endif
 
       #if ENABLE_HTTP
-      getServerCommand(errCount);
+      if(displayMode==2) {
+        getServerCommand(errCount);
+      }
       #endif
       
       // in case of http errors rebot the node
@@ -426,12 +429,19 @@ void handleSettings(int & mode, boolean set) {
     } else if (menuStatus==6) {
         printLcd(lcd, 0,0, "starting task ...",1);
         loopDelay=0;        
+    } else if(menuStatus==7) {
+        mode=2; // Pull Data
+        printLcd(lcd,0,0,"WAITING FOR PULL",1);
+        printLcd(lcd,0,1,"DATA",0);
+    } else if(menuStatus==8) {
+        printLcd(lcd,0,0,"DSP. MODE:",1);
+        printLcd(lcd,0,1,String(displayMode),0);
     }
     return;
   }
   
   menuStatus++;
-  if (menuStatus>6) menuStatus=0;
+  if (menuStatus>8) menuStatus=0;
 
   if( menuStatus==0) {
       printLcd(lcd, 0,0, "EXIT",1);
@@ -447,6 +457,10 @@ void handleSettings(int & mode, boolean set) {
       printLcd(lcd, 0,0, "VERSION",1);
   } else if (menuStatus==6) {
       printLcd(lcd, 0,0, "RUN TASK",1);
+  } else if (menuStatus==7) {
+      printLcd(lcd, 0,0, "PULL DATA",1);
+  } else if (menuStatus==8) {
+      printLcd(lcd, 0,0, "SHOW DSP.MODE",1);
   }
 }
 
@@ -990,14 +1004,20 @@ void publishHttpSensorPayload(int & errCount, String address, float value) {
 }
 
 String getServerCommand(int & errCount) {
-    return "";
-    // start
-    http.begin(restApiUrl+"data/iot_sensor/WOHNTEMP01");
+    //http.begin(restApiUrl+"data/iot_sensor/WOHNTEMP01");
+    http.begin(restApiUrl+"action/iot_get_node_display_text");
     http.addHeader("restapi-username", restApiUser);
     http.addHeader("restapi-password", restApiPwd);
-    int httpCode=http.GET();
+    http.addHeader("Content-Type", "application/json");
+
+    String json="{\"node_name\":\""+nodeName+"\"}";
+    Serial.println(json);
+    int httpCode=http.POST(json);
     if(httpCode==200) {
       //dspLine1=http.getString();
+      printLcd(lcd, 0,0, http.getString(),1);
+      Serial.print("Displaytext:");
+      Serial.println(http.getString());
       return "";
     } else {
       errCount++; 

@@ -40,4 +40,5 @@ def execute(context, plugin_context, params):
     display_text=template.render({"rs": rs, "context": context})
     rs.close()
 
+    display_text=str(display_text.encode("utf-8","ignore").decode("ascii","ignore"))
     params['output']=display_text
