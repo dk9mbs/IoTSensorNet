@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS iot_node (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 ALTER TABLE iot_node ADD COLUMN IF NOT EXISTS location_id int NULL;
+ALTER TABLE iot_node ADD COLUMN IF NOT EXISTS display_template text NULL;
 ALTER TABLE iot_node ADD CONSTRAINT  FOREIGN KEY IF NOT EXISTS (location_id) REFERENCES iot_location (id);
 
 CREATE TABLE IF NOT EXISTS iot_sensor_data(
@@ -245,6 +246,11 @@ INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,so
 
 INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,solution_id) 
     VALUES ('iot_set_node_status','iot_log','insert','before',100,10000);
+
+INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,solution_id) 
+    VALUES ('iot_action_display','iot_get_node_display_text','execute','before',100,10000);
+
+
 
 /* Listviews */
 INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml) VALUES (

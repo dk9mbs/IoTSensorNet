@@ -48,6 +48,12 @@
         {% endcall %}
     {% endcall %}
 
+    {% call forms.row() %}
+        {% call forms.input_multiline('display_template', 'Display Template', '', data['display_template'], disabled=False ) %}
+        {% endcall %}
+    {% endcall %}
+
+
 
     {% endcall %}
 
