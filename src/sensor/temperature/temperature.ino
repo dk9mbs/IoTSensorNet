@@ -141,9 +141,13 @@ void setup() {
   restApiUser=readConfigValue("restapiuser");
   restApiPwd=readConfigValue("restapipwd");
   nodeName=readConfigValue("hostname");
+  displayMode=readConfigValue("displaymode").toInt();
+  
   Serial.println(restApiUrl);
   Serial.println(restApiUser);
-
+  Serial.print("Displaymode:");
+  Serial.println(String(displayMode));
+  
   if(digitalRead(SETUPPIN)==0) runSetup=true;
   
   Serial.print("Setup:");
@@ -213,7 +217,10 @@ void setup() {
       reset(60000);
     }
     #if ENABLE_DISPLAY
-    printLcd(lcd, 0,0, String("running ..."), 1);
+    printLcd(lcd, 0,0, "Dsp.Mode:"+String(displayMode),1);
+    printLcd(lcd, 0,1, "Version "+nodeVersion,0);
+    delay(1000);  
+    printLcd(lcd, 0,0, "running ...", 1);
     #endif
 
   } // run Setup
@@ -290,8 +297,10 @@ void loop() {
       readDhtHum(dht, addressHum, valueHum);
       readDhtTemp(dht,addressTemp, valueTemp);
 
-      dspValue1="T:--C";
-      dspValue2="H:--%";
+      if(displayMode==0) {
+        dspValue1="T:--C";
+        dspValue2="H:--%";
+      }
       
       if (!isnan(valueHum)) {
         dspValue1="H:"+String(int(valueHum))+"%";
@@ -354,7 +363,8 @@ void loop() {
 
       #if ENABLE_HTTP
       if(displayMode==2) {
-        getServerCommand(errCount);
+        getDisplayData(errCount);
+        //printPullData(getDisplayData(errCount));
       }
       #endif
       
@@ -411,10 +421,12 @@ void handleSettings(int & mode, boolean set) {
         printLcd(lcd, 0,1, "CHANGES.",0);
     } else if (menuStatus==1) {
         mode=0; // LOCAL DHT11
+        saveConfigValue("displaymode", String(mode));
         printLcd(lcd,0,0,"WAITING FOR DHT",1);
         printLcd(lcd,0,1,"DATA",0);
     } else if(menuStatus==2) {
         mode=1; //Remote PUSH
+        saveConfigValue("displaymode", String(mode));
         printLcd(lcd,0,0,"WAITING FOR PUSH",1);
         printLcd(lcd,0,1,"DATA",0);
     } else if (menuStatus==3){
@@ -431,6 +443,7 @@ void handleSettings(int & mode, boolean set) {
         loopDelay=0;        
     } else if(menuStatus==7) {
         mode=2; // Pull Data
+        saveConfigValue("displaymode", String(mode));
         printLcd(lcd,0,0,"WAITING FOR PULL",1);
         printLcd(lcd,0,1,"DATA",0);
     } else if(menuStatus==8) {
@@ -879,6 +892,8 @@ void setupFileSystem() {
   if(!SPIFFS.exists(getConfigFilename("restapiuser"))) saveConfigValue("restapiuser", "root");
   if(!SPIFFS.exists(getConfigFilename("restapipwd"))) saveConfigValue("restapipwd", "password");
 
+  if(!SPIFFS.exists(getConfigFilename("displaymode"))) saveConfigValue("displaymode", "0");
+
 }
 
 void setupWifiAP(){
@@ -1003,28 +1018,36 @@ void publishHttpSensorPayload(int & errCount, String address, float value) {
 
 }
 
-String getServerCommand(int & errCount) {
-    //http.begin(restApiUrl+"data/iot_sensor/WOHNTEMP01");
+void getDisplayData(int & errCount) {
     http.begin(restApiUrl+"action/iot_get_node_display_text");
     http.addHeader("restapi-username", restApiUser);
     http.addHeader("restapi-password", restApiPwd);
     http.addHeader("Content-Type", "application/json");
 
-    String json="{\"node_name\":\""+nodeName+"\"}";
-    Serial.println(json);
-    int httpCode=http.POST(json);
+    int httpCode=http.POST("{\"node_name\":\""+nodeName+"\"}");
     if(httpCode==200) {
-      //dspLine1=http.getString();
-      printLcd(lcd, 0,0, http.getString(),1);
-      Serial.print("Displaytext:");
-      Serial.println(http.getString());
-      return "";
+      String line1=split(http.getString(), ';', 0);
+      String line2=split(http.getString(), ';', 1);
+      //Serial.println(http.getString());
+      //Serial.println(line1);
+      //Serial.println(line2);
+      
+      printLcd(lcd, 0,0, line1,1);
+      printLcd(lcd, 0,1, line2,0);
+      
     } else {
       errCount++; 
+      printLcd(lcd, 0,0, String(httpCode),1);
     }
     http.end();
     Serial.print("HTTP Code (get display):");
     Serial.println(httpCode);
-    // end
 }
+
+/*
+void printPullData(String command) {
+  printLcd(lcd, 0,0, command,1);
+  printLcd(lcd, 0,1, "**** DK9MBS ****",0);
+}
+*/
 #endif
