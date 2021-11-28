@@ -8,10 +8,15 @@
  * 
  * https://github.com/lucasmaziero/LiquidCrystal_I2C
  * 
+ * https://github.com/jandrassy/ArduinoOTA (search for ArduinoOTA in ide library manager)
  * ToDo:
  * Mac Address in setupFileSystem: : replace : with -
+ * 
+ * Changelog:
+ * v1.3: DisplayMode2 (PULL Data)
+ * v1.4: https://github.com/esp8266/Arduino/issues/7613  (exeption after http.end() --> espClient as parameter)
 */
-const String nodeVersion="v1.3";
+const String nodeVersion="v1.4";
 #define ENABLE_ONEWIRE true
 #define ENABLE_DHT true
 #define ENABLE_LIGHTNESS false
@@ -19,6 +24,7 @@ const String nodeVersion="v1.3";
 #define ENABLE_DISPLAY true
 #define ENABLE_MQTT false
 #define ENABLE_HTTP true
+#define ENABLE_OTA true
 
 #ifdef ESP32
 #pragma message(THIS EXAMPLE IS FOR ESP8266 ONLY!)
@@ -45,6 +51,12 @@ const String nodeVersion="v1.3";
 #if ENABLE_MQTT
 #include "Adafruit_MQTT.h"
 #include "Adafruit_MQTT_Client.h"
+#endif
+
+#if ENABLE_OTA
+#include <ESP8266mDNS.h>
+#include <WiFiUdp.h>
+#include <ArduinoOTA.h>
 #endif
 
 #define ONEWIREBUSPIN 4
@@ -136,13 +148,13 @@ void setup() {
 
   setupIo();
   setupFileSystem();
-
+    
   restApiUrl=readConfigValue("restapiurl");
   restApiUser=readConfigValue("restapiuser");
   restApiPwd=readConfigValue("restapipwd");
   nodeName=readConfigValue("hostname");
   displayMode=readConfigValue("displaymode").toInt();
-  
+
   Serial.println(restApiUrl);
   Serial.println(restApiUser);
   Serial.print("Displaymode:");
@@ -156,9 +168,9 @@ void setup() {
   Serial.println(readConfigValue("adminpwd"));
   
   if(runSetup) {
-  #if ENABLE_DISPLAY
-  printLcd(lcd, 0,1, "enter setup ...",1);
-  #endif
+    #if ENABLE_DISPLAY
+    printLcd(lcd, 0,1, "enter setup ...",1);
+    #endif
     setupWifiAP();
     setupHttpAdmin();
     return;
@@ -187,6 +199,12 @@ void setup() {
     }
 
     setupWifiSTA(readConfigValue("ssid").c_str(), readConfigValue("password").c_str(), readConfigValue("mac").c_str(), modeDeepSleep);
+
+    #if ENABLE_OTA
+    Serial.println("OTA starting ...");
+    setupOTA(nodeName);
+    Serial.println("OTA started");
+    #endif
     
     #if ENABLE_ONEWIRE    
     sensors.begin();
@@ -230,6 +248,11 @@ void setup() {
 
 void loop() {
     httpServer.handleClient(); 
+    
+    #if ENABLE_OTA
+    ArduinoOTA.handle();
+    #endif
+    
     if (runSetup) return;
 
     if (WiFi.status()!=WL_CONNECTED) {
@@ -449,12 +472,15 @@ void handleSettings(int & mode, boolean set) {
     } else if(menuStatus==8) {
         printLcd(lcd,0,0,"DSP. MODE:",1);
         printLcd(lcd,0,1,String(displayMode),0);
+    } else if(menuStatus==9) {
+        printLcd(lcd,0,0,"IP Address:",1);
+        printLcd(lcd,0,1,String(WiFi.localIP().toString()),0);
     }
     return;
   }
   
   menuStatus++;
-  if (menuStatus>8) menuStatus=0;
+  if (menuStatus>9) menuStatus=0;
 
   if( menuStatus==0) {
       printLcd(lcd, 0,0, "EXIT",1);
@@ -474,6 +500,8 @@ void handleSettings(int & mode, boolean set) {
       printLcd(lcd, 0,0, "PULL DATA",1);
   } else if (menuStatus==8) {
       printLcd(lcd, 0,0, "SHOW DSP.MODE",1);
+  } else if (menuStatus==9) {
+      printLcd(lcd, 0,0, "SHOW IP",1);
   }
 }
 
@@ -772,7 +800,7 @@ void handleHttpSetup() {
     "<html>"
     "<head>"
     "<meta name = \"viewport\" content = \"width = device-width, initial-scale = 1.0, maximum-scale = 1.0, user-scalable=0\">"
-    "<title>DK9MBS/KI5HDH IoT Sensor</title>"
+    "<title>DK9MBS/AG5ZL IoT Sensor</title>"
     "<style>"
     "\"body { background-color: #808080; font-family: Arial, Helvetica, Sans-Serif; Color: #000000; }\""
     "</style>"
@@ -974,7 +1002,7 @@ void reset(int msDelay) {
 void serverLog(int & errCount, int & httpCode, String node, String message) {
   int lastErrorCode=getLastErrorCode();
   
-  http.begin(readConfigValue("restapiurl")+"data/iot_log");
+  http.begin(espClient, readConfigValue("restapiurl")+"data/iot_log");
   http.addHeader("username", readConfigValue("restapiuser"));
   http.addHeader("password", readConfigValue("restapipwd"));
   http.addHeader("Content-Type", "application/json");
@@ -998,7 +1026,7 @@ void publishHttpSensorPayload(int & errCount, String address, float value) {
   Serial.println("====================================");
   Serial.println("publishing sensor data via http");
   
-  http.begin(restApiUrl+"data/iot_sensor_data");
+  http.begin(espClient, restApiUrl+"data/iot_sensor_data");
   http.addHeader("username", restApiUser);
   http.addHeader("password", restApiPwd);
   http.addHeader("Content-Type", "application/json");
@@ -1019,15 +1047,19 @@ void publishHttpSensorPayload(int & errCount, String address, float value) {
 }
 
 void getDisplayData(int & errCount) {
-    http.begin(restApiUrl+"action/iot_get_node_display_text");
+    http.begin(espClient, restApiUrl+"action/iot_get_node_display_text");
     http.addHeader("restapi-username", restApiUser);
     http.addHeader("restapi-password", restApiPwd);
     http.addHeader("Content-Type", "application/json");
 
     int httpCode=http.POST("{\"node_name\":\""+nodeName+"\"}");
     if(httpCode==200) {
-      String line1=split(http.getString(), ';', 0);
-      String line2=split(http.getString(), ';', 1);
+      //String line1=split(http.getString(), ';', 0);
+      //String line2=split(http.getString(), ';', 1);
+      const String& payload=http.getString();
+      const String& line1=payload.substring(0,payload.indexOf(';'));
+      const String& line2=payload.substring(payload.indexOf(';')+1,payload.length());
+      
       //Serial.println(http.getString());
       //Serial.println(line1);
       //Serial.println(line2);
@@ -1039,9 +1071,13 @@ void getDisplayData(int & errCount) {
       errCount++; 
       printLcd(lcd, 0,0, String(httpCode),1);
     }
-    http.end();
+
     Serial.print("HTTP Code (get display):");
     Serial.println(httpCode);
+
+    http.end();
+
+    Serial.println("after http.end()");
 }
 
 /*
@@ -1050,4 +1086,54 @@ void printPullData(String command) {
   printLcd(lcd, 0,1, "**** DK9MBS ****",0);
 }
 */
+#endif
+
+#if ENABLE_OTA
+void setupOTA(String& hostName) {
+  // Port defaults to 8266
+  // ArduinoOTA.setPort(8266);
+
+  // Hostname defaults to esp8266-[ChipID]
+  // ArduinoOTA.setHostname("node-labor");
+
+  // No authentication by default
+  // ArduinoOTA.setPassword("admin");
+
+  // Password can be set with it's md5 value as well
+  // MD5(admin) = 21232f297a57a5a743894a0e4a801fc3
+  // ArduinoOTA.setPasswordHash("21232f297a57a5a743894a0e4a801fc3");
+
+  ArduinoOTA.onStart([]() {
+    String type;
+    if (ArduinoOTA.getCommand() == U_FLASH) {
+      type = "sketch";
+    } else { // U_FS
+      type = "filesystem";
+    }
+
+    // NOTE: if updating FS this would be the place to unmount FS using FS.end()
+    Serial.println("Start updating " + type);
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\nEnd");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) {
+      Serial.println("Auth Failed");
+    } else if (error == OTA_BEGIN_ERROR) {
+      Serial.println("Begin Failed");
+    } else if (error == OTA_CONNECT_ERROR) {
+      Serial.println("Connect Failed");
+    } else if (error == OTA_RECEIVE_ERROR) {
+      Serial.println("Receive Failed");
+    } else if (error == OTA_END_ERROR) {
+      Serial.println("End Failed");
+    }
+  });
+  ArduinoOTA.begin();
+}
 #endif
