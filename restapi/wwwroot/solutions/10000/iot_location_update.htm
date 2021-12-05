@@ -11,7 +11,7 @@
 
 {% block content %}
 
-    {% call forms.record_form( table, id ) %}
+    {% call forms.record_form( table, id, context=context ) %}
 
     {% call forms.row() %}
         {% call forms.input('id', 'ID', 'Location ID', data['id'], disabled=True ) %}

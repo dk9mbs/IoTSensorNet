@@ -11,7 +11,7 @@
 
 {% block content %}
 
-    {% call forms.record_form( table, '' ) %}
+    {% call forms.record_form( table, '',context=context ) %}
 
     {% call forms.row() %}
         {% call forms.input('name', 'Name', '', '' ) %}

@@ -1,3 +1,5 @@
+DELETE FROM api_ui_app_nav_item WHERE solution_id=10000;
+DELETE FROM api_ui_app WHERE solution_id=10000;
 DELETE FROM api_table_view WHERE solution_id=10000;
 DELETE FROM api_event_handler WHERE solution_id=10000;
 
@@ -249,6 +251,32 @@ INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,so
 
 INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,solution_id) 
     VALUES ('iot_action_display','iot_get_node_display_text','execute','before',100,10000);
+
+
+
+INSERT IGNORE INTO api_ui_app (id, name,description,home_url,solution_id) 
+VALUES (
+10000,'IoT Service App','System Verwaltungs App','/ui/v1.0/data/view/iot_sensor/default?app_id=10000',10000);
+
+INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
+10000,10000,'Sensoren','/ui/v1.0/data/view/iot_sensor/default',1,10000);
+
+INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
+10002,10000,'Nodes','/ui/v1.0/data/view/iot_node/default',1,10000);
+
+INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
+10003,10000,'Logs','/ui/v1.0/data/view/iot_log/default',1,10000);
+
+INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
+10004,10000,'Routing','/ui/v1.0/data/view/iot_sensor_routing/default',1,10000);
+
+INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
+10005,10000,'Locations','/ui/v1.0/data/view/iot_location/default',1,10000);
+
+INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
+10006,10000,'Sensor Typen','/ui/v1.0/data/view/iot_sensor_type/default',1,10000);
+
+
 
 
 
