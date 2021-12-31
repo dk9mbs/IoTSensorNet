@@ -262,6 +262,9 @@ INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) 
 10000,10000,'Sensoren','/ui/v1.0/data/view/iot_sensor/default',1,10000);
 
 INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
+10001,10000,'Sensor Daten (avg)','/ui/v1.0/data/view/iot_sensor_data/default',1,10000);
+
+INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
 10002,10000,'Nodes','/ui/v1.0/data/view/iot_node/default',1,10000);
 
 INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
@@ -555,3 +558,29 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
         <field name="name" table_alias="t" alias="name"/>
     </select>
 </restapi>');
+
+
+
+
+/* avg over sensor */
+INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml) VALUES (
+10019,'LISTVIEW','default',10000,'id',10000,'<restapi type="select">
+    <table name="iot_sensor_data" alias="sd"/>
+    <filter type="and">
+        <condition field="sensor_value" alias="sd" operator="notnull"/>
+        <condition field="id" alias="s" operator="notnull"/>
+        <filter type="and">
+            <condition field="sensor_id" alias="sd" value="$$query$$" operator=" like "/>
+        </filter>
+    </filter>
+    <joins>
+        <join type="left" table="iot_sensor" alias="s" condition="sd.sensor_id=s.id"/>
+    </joins>
+    <select>
+        <field name="id" table_alias="s" alias="id" grouping="y" header="ID"/>
+        <field name="description" table_alias="s" grouping="y" header="Description"/>
+        <field name="sensor_value" table_alias="sd" func="avg" alias="last_value" header="Value (avg)"/>
+        <field name="unit" table_alias="s" grouping="y" header="Unit"/>
+    </select>
+</restapi>');
+

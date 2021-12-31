@@ -9,6 +9,7 @@
  * https://github.com/lucasmaziero/LiquidCrystal_I2C
  * 
  * https://github.com/jandrassy/ArduinoOTA (search for ArduinoOTA in ide library manager)
+ * https://arduinojson.org/?utm_source=meta&utm_medium=library.properties
  * ToDo:
  * Mac Address in setupFileSystem: : replace : with -
  * 
@@ -34,6 +35,7 @@ const String nodeVersion="v1.4";
 #include "dk9mbs_tools.h"
 #include <ESP8266WiFi.h>
 #include <FS.h>
+#include <ArduinoJson.h>
 
 #if ENABLE_ONEWIRE
 #include <OneWire.h>
