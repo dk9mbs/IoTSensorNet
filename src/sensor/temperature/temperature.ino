@@ -17,7 +17,7 @@
  * v1.3: DisplayMode2 (PULL Data)
  * v1.4: https://github.com/esp8266/Arduino/issues/7613  (exeption after http.end() --> espClient as parameter)
 */
-const String nodeVersion="v1.4";
+const String nodeVersion="v1.5(ssl)";
 #define ENABLE_ONEWIRE true
 #define ENABLE_DHT true
 #define ENABLE_LIGHTNESS false
@@ -26,6 +26,7 @@ const String nodeVersion="v1.4";
 #define ENABLE_MQTT false
 #define ENABLE_HTTP true
 #define ENABLE_OTA true
+#define ENABLE_HTTPS true
 
 #ifdef ESP32
 #pragma message(THIS EXAMPLE IS FOR ESP8266 ONLY!)
@@ -34,6 +35,7 @@ const String nodeVersion="v1.4";
 
 #include "dk9mbs_tools.h"
 #include <ESP8266WiFi.h>
+
 #include <FS.h>
 #include <ArduinoJson.h>
 
@@ -85,7 +87,12 @@ DallasTemperature sensors(&oneWire);
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 #endif
 
-WiFiClient espClient;
+#if ENABLE_HTTPS
+WiFiClientSecure espClient;
+#else
+  WiFiClient espClient;
+#endif
+
 ESP8266WebServer httpServer(80);
 HTTPClient http;
 
@@ -121,6 +128,8 @@ String restApiUrl;
 String restApiUser;
 String restApiPwd;
 String nodeName;
+String restApiSHAFingerPrint;
+boolean insecure=true;
 
 int state=0; // Status from Statemachine
 int transferFailedCount; // count the number of transfer faileds (http)
@@ -134,10 +143,6 @@ int key1Status=0; //statemachine
 void setup() { 
   Serial.begin(115200);
 
-  //restApiUrl=readConfigValue("restapiurl");
-  //restApiUser=readConfigValue("restapiuser");
-  //restApiPwd=readConfigValue("restapipwd");
-  //nodeName=readConfigValue("hotname");
   transferFailedCount=0;
   
   #if ENABLE_DISPLAY
@@ -156,12 +161,14 @@ void setup() {
   restApiPwd=readConfigValue("restapipwd");
   nodeName=readConfigValue("hostname");
   displayMode=readConfigValue("displaymode").toInt();
-
+  restApiSHAFingerPrint=readConfigValue("hostsha1fingerprint");
+  insecure=readConfigValue("insecure");
+  
   Serial.println(restApiUrl);
   Serial.println(restApiUser);
   Serial.print("Displaymode:");
   Serial.println(String(displayMode));
-  
+
   if(digitalRead(SETUPPIN)==0) runSetup=true;
   
   Serial.print("Setup:");
@@ -179,7 +186,7 @@ void setup() {
   } else {
     #if ENABLE_DISPLAY
     printLcd(lcd, 0,0, "connecting WLAN",1);
-    printLcd(lcd, 0,1, "Version "+nodeVersion,0);
+    printLcd(lcd, 0,1, nodeVersion,0);
     #endif
     
     setupHttpAdmin();
@@ -201,6 +208,26 @@ void setup() {
     }
 
     setupWifiSTA(readConfigValue("ssid").c_str(), readConfigValue("password").c_str(), readConfigValue("mac").c_str(), modeDeepSleep);
+
+
+    #if ENABLE_HTTPS
+    if(insecure==true) {
+      Serial.println("!!!!Use insecure connection!!!");
+      espClient.setInsecure(); //the magic line, use with caution # without fingerprint
+    } else {
+      Serial.println("Use fingerprint");
+      char charBuf[70];
+      restApiSHAFingerPrint.toCharArray(charBuf, 70);
+      espClient.setFingerprint(charBuf);
+    }
+    
+    Serial.print("SHA-1 fingerprint:");
+    Serial.println(restApiSHAFingerPrint);
+    Serial.print("Restapi URL:");
+    Serial.println(restApiUrl);
+    Serial.print("Restapi port");
+    Serial.println(443);
+    #endif
 
     #if ENABLE_OTA
     Serial.println("OTA starting ...");
@@ -229,7 +256,7 @@ void setup() {
     int httpCode;
     errCount=0;
     httpCode=0;
-    
+
     serverLog(errCount,httpCode, readConfigValue("hostname"), "Node started.");
     if(errCount>0) {
       printLcd(lcd, 0,0, "Log error ("+String(httpCode)+")",1);
@@ -668,6 +695,9 @@ void readOneWireTempMultible(int & errCount) {
   DeviceAddress mac;
   String address="";
   char temperaturenow [15];
+
+  Serial.print("Number of one-wire sensors:");
+  Serial.println(numberOfSensors);
   
   for(int x=0;x<numberOfSensors;x++){
     sensors.getAddress(mac, x);
@@ -797,6 +827,13 @@ void handleHttpSetup() {
       handleReset();
     }
 
+    String checked;
+    if(readConfigValue("insecure")!=0) {
+      checked="checked";
+    } else {
+      checked="";
+    }
+
     String html =
     "<!DOCTYPE HTML>"
     "<html>"
@@ -838,6 +875,8 @@ void handleHttpSetup() {
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>RestAPI URL (for example: http://192.168.2.123:5000/api/v1.0/)</div><INPUT style=\"width:99%;\" type=\"text\" name=\"RESTAPIURL\" value=\""+ readConfigValue("restapiurl") +"\"></div>"
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>RestAPI User</div><INPUT style=\"width:99%;\" type=\"text\" name=\"RESTAPIUSER\" value=\""+ readConfigValue("restapiuser") +"\"></div>"
     "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>RestAPI Password</div><INPUT style=\"width:99%;\" type=\"text\" name=\"RESTAPIPWD\" value=\""+ readConfigValue("restapipwd") +"\"></div>"
+    "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>RestAPI SHA1 Fingerprint (only for HTTPS)</div><INPUT style=\"width:99%;\" type=\"text\" name=\"HOSTSHA1FINGERPRINT\" value=\""+ readConfigValue("hostsha1fingerprint") +"\"></div>"
+    "<div style=\"border-style: solid; border-width:thin; border-color: #000000;padding: 2px;margin: 1px;\"><div>RestAPI Use Insecure</div><INPUT style=\"width:99%;\" type=\"checkbox\" name=\"INSECURE\"" + checked +"></div>"
     "</P>"
     "<div>"
     "<INPUT type=\"submit\" value=\"Save\">"
@@ -847,6 +886,7 @@ void handleHttpSetup() {
     "</FORM>"
     "</body>"
     "</html>";
+    Serial.println(html);
     httpServer.send(200, "text/html", html); 
 }
 
@@ -863,10 +903,15 @@ void handleSubmit() {
   saveConfigValue("brokerpwd", httpServer.arg("BROKERPWD"));
   saveConfigValue("hostname", httpServer.arg("HOSTNAME"));
   saveConfigValue("pubtopic", httpServer.arg("PUBTOPIC"));
-
   saveConfigValue("restapiurl", httpServer.arg("RESTAPIURL"));
   saveConfigValue("restapiuser", httpServer.arg("RESTAPIUSER"));
   saveConfigValue("restapipwd", httpServer.arg("RESTAPIPWD"));
+  saveConfigValue("hostsha1fingerprint",httpServer.arg("HOSTSHA1FINGERPRINT")); 
+  if (httpServer.hasArg("INSECURE")) {
+    saveConfigValue("insecure",httpServer.arg("INSECURE")); 
+  } else {
+    saveConfigValue("insecure","0"); 
+  }
 
 }
 
@@ -909,20 +954,18 @@ void setupFileSystem() {
   if(!SPIFFS.exists(getConfigFilename("mode"))) saveConfigValue("mode", "loop");//deepsleep or loop
   if(!SPIFFS.exists(getConfigFilename("sleeptime"))) saveConfigValue("sleeptime", "60");
   if(!SPIFFS.exists(getConfigFilename("adminpwd"))) saveConfigValue("adminpwd", "123456789ff");
-
   if(!SPIFFS.exists(getConfigFilename("staticbrokeraddr"))) saveConfigValue("staticbrokeraddr", "192.168.4.1");
   if(!SPIFFS.exists(getConfigFilename("staticbrokerport"))) saveConfigValue("staticbrokerport", "1883");
-
   if(!SPIFFS.exists(getConfigFilename("brokeruser"))) saveConfigValue("brokeruser", "username");
   if(!SPIFFS.exists(getConfigFilename("brokerpwd"))) saveConfigValue("brokerpwd", "password");
   if(!SPIFFS.exists(getConfigFilename("hostname"))) saveConfigValue("hostname", "node");
   if(!SPIFFS.exists(getConfigFilename("pubtopic"))) saveConfigValue("pubtopic", "temp/sensor");
-
   if(!SPIFFS.exists(getConfigFilename("restapiurl"))) saveConfigValue("restapiurl", "http://192.168.2.111:5000/api/v1.0/");
   if(!SPIFFS.exists(getConfigFilename("restapiuser"))) saveConfigValue("restapiuser", "root");
   if(!SPIFFS.exists(getConfigFilename("restapipwd"))) saveConfigValue("restapipwd", "password");
-
   if(!SPIFFS.exists(getConfigFilename("displaymode"))) saveConfigValue("displaymode", "0");
+  if(!SPIFFS.exists(getConfigFilename("hostsha1fingerprint"))) saveConfigValue("hostsha1fingerprint", "AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA");
+  if(!SPIFFS.exists(getConfigFilename("insecure"))) saveConfigValue("insecure", "1");
 
 }
 
@@ -932,7 +975,7 @@ void setupWifiAP(){
 
   if(pwd==""){
     Serial.println("Use default password!");
-    pwd="0000";
+    pwd="00000000";
   }
   
   Serial.print("Password for AP:");
@@ -1003,8 +1046,10 @@ void reset(int msDelay) {
 #if ENABLE_HTTP
 void serverLog(int & errCount, int & httpCode, String node, String message) {
   int lastErrorCode=getLastErrorCode();
-  
-  http.begin(espClient, readConfigValue("restapiurl")+"data/iot_log");
+
+  Serial.println(restApiUrl);
+
+  http.begin(espClient, restApiUrl+"data/iot_log");
   http.addHeader("username", readConfigValue("restapiuser"));
   http.addHeader("password", readConfigValue("restapipwd"));
   http.addHeader("Content-Type", "application/json");
@@ -1027,6 +1072,7 @@ void publishHttpSensorPayload(int & errCount, String address, float value) {
   payload = "{\"sensor_value\":"+String(value)+", \"sensor_id\":\""+address+"\", \"sensor_namespace\":\"restapi\"  }";
   Serial.println("====================================");
   Serial.println("publishing sensor data via http");
+  Serial.println(restApiUrl);
   
   http.begin(espClient, restApiUrl+"data/iot_sensor_data");
   http.addHeader("username", restApiUser);
