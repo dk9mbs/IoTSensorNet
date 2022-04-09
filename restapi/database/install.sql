@@ -48,6 +48,8 @@ CREATE TABLE IF NOT EXISTS iot_sensor_data(
     PRIMARY KEY(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+ALTER TABLE iot_sensor_data ADD INDEX IF NOT EXISTS sensor_id_created_on (sensor_id, created_on);
+
 
 CREATE TABLE IF NOT EXISTS iot_sensor_type(
     id int NOT NULL,
