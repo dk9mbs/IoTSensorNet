@@ -1,6 +1,6 @@
 
 /*
- * 
+ * https://unsinnsbasis.de/bmp180-bmp280-luftdrucksensoren/
  * https://arduino-esp8266.readthedocs.io/en/latest/esp8266wifi/station-class.html
  * https://gist.github.com/bbx10/5a2885a700f30af75fc5
  * https://github.com/esp8266/Arduino/blob/4897e0006b5b0123a2fa31f67b14a3fff65ce561/libraries/ESP8266WiFi/src/include/wl_definitions.h
@@ -10,14 +10,17 @@
  * 
  * https://github.com/jandrassy/ArduinoOTA (search for ArduinoOTA in ide library manager)
  * https://arduinojson.org/?utm_source=meta&utm_medium=library.properties
+ * https://github.com/adafruit/Adafruit_BMP085_Unified
  * ToDo:
  * Mac Address in setupFileSystem: : replace : with -
  * 
  * Changelog:
  * v1.3: DisplayMode2 (PULL Data)
  * v1.4: https://github.com/esp8266/Arduino/issues/7613  (exeption after http.end() --> espClient as parameter)
+ * v1.5: ssl implemented
+ * v1.6: BMP180 sensor implemented
 */
-const String nodeVersion="v1.5(ssl)";
+const String nodeVersion="v1.6";
 #define ENABLE_ONEWIRE true
 #define ENABLE_DHT true
 #define ENABLE_LIGHTNESS false
@@ -27,6 +30,7 @@ const String nodeVersion="v1.5(ssl)";
 #define ENABLE_HTTP true
 #define ENABLE_OTA true
 #define ENABLE_HTTPS true
+#define ENABLE_BMP true
 
 #ifdef ESP32
 #pragma message(THIS EXAMPLE IS FOR ESP8266 ONLY!)
@@ -63,6 +67,14 @@ const String nodeVersion="v1.5(ssl)";
 #include <ArduinoOTA.h>
 #endif
 
+#if ENABLE_BMP
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BMP085_U.h>
+
+#define PRESSURE_NULL (1013.25F)
+#define LOCAL_ALTITUDE (138.0F)
+#endif
+
 #define ONEWIREBUSPIN 4
 #define SETUPPIN 5 
 #define LIGHTNESS_IN_PIN A0
@@ -91,6 +103,11 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 WiFiClientSecure espClient;
 #else
   WiFiClient espClient;
+#endif
+
+
+#if ENABLE_BMP
+Adafruit_BMP085_Unified bmp = Adafruit_BMP085_Unified(10085);
 #endif
 
 ESP8266WebServer httpServer(80);
@@ -247,6 +264,14 @@ void setup() {
     attachInterrupt(digitalPinToInterrupt(RAINFALL_PIN), rainfallIsr, RISING);
     #endif
 
+    #if ENABLE_BMP
+    if (bmp.begin() ){
+      Serial.println("BMP180 found ans started!");
+    } else {
+      Serial.println("No BMP180 sensor found!!!");     
+    }
+
+    #endif
     // attach Reset pin isr
     attachInterrupt(digitalPinToInterrupt(SETUPPIN), buttonIsr, CHANGE);
 
@@ -335,14 +360,20 @@ void loop() {
       Serial.println ("Executing tasks...");
       String address;
       float value;
+
+      String addressPressure;
+      String addressTemp;
+      String addressAltitude;
+      String addressHum;
+
   
       #if ENABLE_ONEWIRE
       readOneWireTempMultible(errCount);
       #endif
 
       #if ENABLE_DHT
-      String addressHum;
-      String addressTemp;
+      //String addressHum;
+      //String addressTemp;
       float valueHum;
       float valueTemp;
 
@@ -412,6 +443,32 @@ void loop() {
         publishMqttSensorPayload(errCount, address, value);
         #endif
       #endif
+
+      #if ENABLE_BMP
+        float t;
+        float p;
+        float a;
+        
+        readBmp180(bmp, addressPressure,addressTemp,addressAltitude, p, t, a);
+        Serial.println("************");
+        Serial.println(p);
+        Serial.println(t);
+        Serial.println(a);
+        Serial.println(addressPressure);
+        Serial.println(addressTemp);
+        Serial.println(addressAltitude);
+        Serial.println("************");
+
+        #if ENABLE_MQTT  
+        publishMqttSensorPayload(sensorTopic, addressPressure, p);
+        #endif
+
+        #if ENABLE_HTTP
+        publishHttpSensorPayload(errCount, addressPressure,p);
+        #endif    
+              
+      #endif
+
 
       #if ENABLE_HTTP
       if(displayMode==2) {
@@ -717,6 +774,75 @@ void readOneWireTempMultible(int & errCount) {
     publishHttpSensorPayload(errCount,address,temperatureC); 
     #endif
   }
+}
+#endif
+
+#if ENABLE_BMP
+void readBmp180(Adafruit_BMP085_Unified& bmp, String& addressPressure,String& addressTemp,String& addressAltitude, 
+  float& pressure, float& temperature, float& altitude) {
+    
+  addressPressure=createIoTDeviceAddress("bmp.pressure");
+  addressTemp=createIoTDeviceAddress("bmp180.temp");
+  addressAltitude=createIoTDeviceAddress("bmp180.altitude");
+  altitude=0;
+
+  // Luftdruck und Temperatur ausgeben
+  // getPressure() liefert Pascal; für hPa durch 100 teilen
+  bmp.getPressure(&pressure);
+  pressure /= 100;
+  Serial.print("Luftdruck:      ");
+  Serial.print(pressure,1);  // Ausgabe mit einer Nachkommastelle
+  Serial.println(" hPa");
+ 
+  bmp.getTemperature(&temperature);
+  Serial.print("Temperatur:     ");
+  Serial.print(temperature,1);
+  Serial.println(" °C");
+ 
+  // aus dem gemessenen Druck und dem aktuellen Druck auf Meereshöhe
+  // die Höhe des Standorts berechnen
+  altitude=bmp.pressureToAltitude(PRESSURE_NULL, pressure);
+  Serial.print("Höhe über Meer: ");
+  Serial.print(altitude,1); 
+  Serial.println(" m");
+ 
+  // mit der bekannten Höhe des Standorts den gemessenen Druck in
+  // Druck auf Meereshöhe umrechnen
+  pressure=bmp.seaLevelForAltitude(LOCAL_ALTITUDE, pressure);
+  Serial.print("Luftdruck (MH): ");
+  Serial.print(pressure,1); 
+  Serial.println(" hPa\n");
+
+  /*
+  sensors_event_t event;
+  bmp.getEvent(&event);
+
+  if(event.pressure) {
+    pressure=event.pressure;
+    Serial.print("Pressure:    ");
+    Serial.print(event.pressure);
+    Serial.println(" hPa");
+    
+    bmp.getTemperature(&temperature);
+    Serial.print("Temperature: ");
+    Serial.print(temperature);
+    Serial.println(" C");
+    */  
+    /* Then convert the atmospheric pressure, and SLP to altitude         */
+    /* Update this next line with the current SLP for better results      */
+    /*
+    float seaLevelPressure = SENSORS_PRESSURE_SEALEVELHPA;
+    Serial.print("Altitude:    "); 
+    Serial.print(bmp.pressureToAltitude(seaLevelPressure,
+                                        event.pressure)); 
+    Serial.println(" m");
+    Serial.println("");          
+  } else {
+    Serial.println("Error reading pressure from BMP sensor!");
+  }
+  */
+
+      
 }
 #endif
 

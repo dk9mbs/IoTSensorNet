@@ -25,8 +25,8 @@ def execute(context, plugin_context, params):
         logger.warning(f"Missings params")
         return
 
-    JinjaEnvironment.register_template_function('iot_get_numeric_sensor_value', iot_common.get_numeric_sensor_value)
-    JinjaEnvironment.register_template_function('iot_get_sensor_value', iot_common.get_sensor_value)
+    #JinjaEnvironment.register_template_function('iot_get_numeric_sensor_value', iot_common.get_numeric_sensor_value)
+    #JinjaEnvironment.register_template_function('iot_get_sensor_value', iot_common.get_sensor_value)
 
     node_name=params['input']['node_name']
     display_text=""

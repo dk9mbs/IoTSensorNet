@@ -254,6 +254,9 @@ INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,so
 INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,solution_id) 
     VALUES ('iot_action_display','iot_get_node_display_text','execute','before',100,10000);
 
+INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,solution_id) 
+    VALUES ('iot_app_start','$app_start','execute','before',100,10000);
+
 
 
 INSERT IGNORE INTO api_ui_app (id, name,description,home_url,solution_id) 
