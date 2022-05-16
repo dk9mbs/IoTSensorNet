@@ -1,3 +1,7 @@
+DROP TABLE IF EXISTS iot_manual_sensor_data;
+
+DELETE FROM api_process_log WHERE event_handler_id IN (SELECT id FROM api_event_handler WHERE solution_id=10000);
+
 DELETE FROM api_ui_app_nav_item WHERE solution_id=10000;
 DELETE FROM api_ui_app WHERE solution_id=10000;
 DELETE FROM api_table_view WHERE solution_id=10000;
@@ -65,11 +69,20 @@ CREATE TABLE IF NOT EXISTS iot_sensor (
     id varchar(250) NOT NULL COMMENT 'unique id',
     alias varchar(250) NOT NULL COMMENT 'sensor_id',
     description varchar(250) NOT NULL,
+  last_value decimal(15,4) DEFAULT NULL,
+  last_value_on datetime DEFAULT NULL,
+  min_value decimal(15,4) NOT NULL DEFAULT 0.0000,
+  max_value decimal(15,4) NOT NULL DEFAULT 0.0000,
     unit varchar(50) NOT NULL default 'unit',
     days_in_history int NOT NULL default '0' COMMENT 'auto delete in days',
     auto_delete_sensor_data smallint NOT NULL default '0' COMMENT '0=yes -1=no',
-    PRIMARY KEY(id)
+  watchdog_warning_sec int(11) DEFAULT NULL COMMENT 'Watchdog warnmeldungen wenn x sec. keine Nachricht',
+  type_id int(11) DEFAULT NULL,
+    PRIMARY KEY(id),
+  FOREIGN KEY (type_id) REFERENCES iot_sensor_type (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+
 
 ALTER TABLE iot_sensor ADD COLUMN IF NOT EXISTS type_id int NULL;
 ALTER TABLE iot_sensor ADD CONSTRAINT  FOREIGN KEY IF NOT EXISTS (type_id) REFERENCES iot_sensor_type (id);
@@ -124,6 +137,30 @@ CREATE TABLE IF NOT EXISTS iot_log (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 
+CREATE TABLE IF NOT EXISTS iot_manual_sensor_data_status (
+    id int NOT NULL,
+    name varchar(50) NOT NULL,
+    created_on timestamp default CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+INSERT IGNORE INTO iot_manual_sensor_data_status (id,name) VALUES (10,'New');
+INSERT IGNORE INTO iot_manual_sensor_data_status (id,name) VALUES (20,'Processed');
+INSERT IGNORE INTO iot_manual_sensor_data_status (id,name) VALUES (30,'Error');
+
+CREATE TABLE IF NOT EXISTS iot_manual_sensor_data (
+    id int NOT NULL AUTO_INCREMENT,
+    name varchar(50) NOT NULL,
+    external_sensor_id varchar(250) NOT NULL COMMENT 'External Sensor ID from iot_sensor_routing',
+    value decimal(15,4) DEFAULT NULL,
+    status_id int NOT NULL DEFAULT 10,
+    error_text text NULL COMMENT 'In case of process error',
+    created_on timestamp default CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY(id),
+    FOREIGN KEY(status_id) REFERENCES iot_manual_sensor_data_status(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+
 INSERT IGNORE INTO api_user (id,username,password,is_admin,disabled,solution_id) VALUES (10000,'IoTSrv','password',0,0,10000);
 INSERT IGNORE INTO api_user (id,username,password,is_admin,disabled,solution_id) VALUES (10001,'IoTAdmin','password',0,-1,10000);
 
@@ -174,6 +211,14 @@ INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,des
     VALUES
     (10009,'iot_sensor_type','iot_sensor_type','id','int','name',10000);
 
+INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
+    VALUES
+    (10010,'iot_manual_sensor_data','iot_manual_sensor_data','id','int','name',10000);
+
+INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
+    VALUES
+    (10011,'iot_manual_sensor_data_status','iot_manual_sensor_data_status','id','int','name',10000);
+
 
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
@@ -205,6 +250,12 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
     (10000,10009,0,-1,0,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
+    VALUES
+    (10000,10010,-1,-1,0,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
+    VALUES
+    (10000,10011,0,-1,0,10000);
 
 
 
@@ -239,6 +290,12 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
     VALUES
     (10001,10009,-1,-1,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
+    VALUES
+    (10001,10010,-1,-1,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
+    VALUES
+    (10001,10011,-1,-1,-1,-1,10000);
 
 
 
@@ -256,6 +313,9 @@ INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,so
 
 INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,solution_id) 
     VALUES ('iot_app_start','$app_start','execute','before',100,10000);
+
+INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,run_async,solution_id) 
+    VALUES ('iot_pl_man_sensor_data','iot_manual_sensor_data','insert','after',100,-1,10000);
 
 
 
@@ -283,6 +343,12 @@ INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) 
 
 INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
 10006,10000,'Sensor Typen','/ui/v1.0/data/view/iot_sensor_type/default',1,10000);
+
+INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
+10007,10000,'Zählerstandserfassung','/ui/v1.0/data/view/iot_manual_sensor_data/default',1,10000);
+
+INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
+10008,10000,'Status werte Zählerstandserfassung','/ui/v1.0/data/view/iot_manual_sensor_data_status/default',1,10000);
 
 
 
@@ -495,9 +561,6 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
     </select>
 </restapi>');
 
-
-
-
 INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml) VALUES (
 10015,'LISTVIEW','default',10008,'id',10000,'<restapi type="select">
     <table name="iot_location" alias="l"/>
@@ -528,15 +591,6 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
     </select>
 </restapi>');
 
-
-
-
-
-
-
-
-
-
 INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml) VALUES (
 10017,'LISTVIEW','default',10009,'id',10000,'<restapi type="select">
     <table name="iot_sensor_type" alias="t"/>
@@ -564,9 +618,6 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
     </select>
 </restapi>');
 
-
-
-
 /* avg over sensor */
 INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml) VALUES (
 10019,'LISTVIEW','default',10000,'id',10000,'<restapi type="select">
@@ -589,3 +640,26 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
     </select>
 </restapi>');
 
+
+INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml) VALUES (
+10020,'LISTVIEW','default',10010,'id',10000,'<restapi type="select">
+    <table name="iot_manual_sensor_data" alias="m"/>
+    <filter type="or">
+        <condition field="name" alias="m" value="$$query$$" operator="$$operator$$"/>
+    </filter>
+    <joins>
+        <join type="inner" table="iot_manual_sensor_data_status" alias="s" condition="s.id=m.status_id"/>
+    </joins>
+    <orderby>
+        <field name="created_on" alias="m" sort="DESC"/>
+    </orderby>
+    <select>
+        <field name="id" table_alias="m" alias="id" header="ID"/>
+        <field name="name" table_alias="m" header="Name"/>
+        <field name="external_sensor_id" table_alias="m" header="Zähler"/>
+        <field name="value" table_alias="m" header="Wert"/>
+        <field name="name" alias="status_name" table_alias="s" header="Status"/>
+        <field name="error_text" table_alias="m" header="Fehler"/>
+        <field name="created_on" table_alias="m" header="Datum"/>
+    </select>
+</restapi>');
