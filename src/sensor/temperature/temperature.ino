@@ -30,7 +30,7 @@ const String nodeVersion="v1.6";
 #define ENABLE_HTTP true
 #define ENABLE_OTA true
 #define ENABLE_HTTPS true
-#define ENABLE_BMP true
+#define ENABLE_BMP false
 
 #ifdef ESP32
 #pragma message(THIS EXAMPLE IS FOR ESP8266 ONLY!)
