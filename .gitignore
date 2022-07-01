@@ -5,4 +5,4 @@ src/sensor/repeater/data/*.cfg
 3D/stl
 *.FCStd1
 *.pyc
-
+src/sensor/temperature/config.h

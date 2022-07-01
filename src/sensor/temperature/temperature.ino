@@ -19,24 +19,28 @@
  * v1.4: https://github.com/esp8266/Arduino/issues/7613  (exeption after http.end() --> espClient as parameter)
  * v1.5: ssl implemented
  * v1.6: BMP180 sensor implemented
+ * v1.7: Rainfall Sensor implemented
 */
-const String nodeVersion="v1.6";
+const String nodeVersion="v1.7";
+/*
 #define ENABLE_ONEWIRE true
 #define ENABLE_DHT true
 #define ENABLE_LIGHTNESS false
-#define ENABLE_RAINFALL false
+#define ENABLE_RAINFALL true
 #define ENABLE_DISPLAY true
 #define ENABLE_MQTT false
 #define ENABLE_HTTP true
 #define ENABLE_OTA true
-#define ENABLE_HTTPS true
+#define ENABLE_HTTPS false
 #define ENABLE_BMP false
+*/
 
 #ifdef ESP32
 #pragma message(THIS EXAMPLE IS FOR ESP8266 ONLY!)
 #error Select ESP8266 board.
 #endif
 
+#include "config.h"
 #include "dk9mbs_tools.h"
 #include <ESP8266WiFi.h>
 
@@ -127,6 +131,7 @@ DHT dht (DHT_PIN, DHT_TYPE);
 #if ENABLE_RAINFALL
 //Niederschlag mit Wippe gezaehlt
 int rainfallCount=0;
+int rainfallSended=0;
 int lastrainfallSignal=0; 
 #endif
 
@@ -393,7 +398,7 @@ void loop() {
         #endif
 
         #if ENABLE_HTTP
-        publishHttpSensorPayload(errCount, addressHum,valueHum);
+        publishHttpSensorPayload(errCount, addressHum,valueHum, "restapi");
         #endif    
       } else {
         Serial.println("!Cannot read DHT Hum data");
@@ -407,7 +412,7 @@ void loop() {
         #endif
 
         #if ENABLE_HTTP
-        publishHttpSensorPayload(errCount, addressTemp,valueTemp);
+        publishHttpSensorPayload(errCount, addressTemp,valueTemp, "restapi");
         #endif    
       } else {
         Serial.println("!Cannot read DHT Temp data");
@@ -434,14 +439,16 @@ void loop() {
       #endif
 
       #if ENABLE_RAINFALL
-        readRainfall(address, value);
+        readRainfall(rainfallCount, rainfallSended, address, value);
         #if ENABLE_MQTT
         publishMqttSensorPayload(sensorTopic, address, value);
         #endif
   
         #if ENABLE_HTTP
-        publishMqttSensorPayload(errCount, address, value);
+        publishHttpSensorPayload(errCount, address, value, "sum");
         #endif
+        
+        rainfallSended=rainfallCount;
       #endif
 
       #if ENABLE_BMP
@@ -464,7 +471,7 @@ void loop() {
         #endif
 
         #if ENABLE_HTTP
-        publishHttpSensorPayload(errCount, addressPressure,p);
+        publishHttpSensorPayload(errCount, addressPressure,p,"restapi");
         #endif    
               
       #endif
@@ -666,20 +673,26 @@ ICACHE_RAM_ATTR void buttonIsr() {
 
 #if ENABLE_RAINFALL
 ICACHE_RAM_ATTR void rainfallIsr() {
+  //if (digitalRead(RAINFALL_PIN)==false) return;
+  
   int now=millis();
-  if(now-lastrainfallSignal < DEBOUNCE_TIME_MS) return;
+  if(now-lastrainfallSignal < 500) return;
   
   rainfallCount++;
   lastrainfallSignal=millis();
 
-  //Serial.print("Rain:");
-  //Serial.println(rainfallCount);
+  Serial.println(rainfallCount);
 }
 
-void readRainfall(String& address, float& value) {
-  Serial.println("reading the Rainfall sensor");
+void readRainfall(int rainfallCount, int rainfallSended, String& address, float& value) {
+  Serial.print("reading the Rainfall sensor ...");
+
   address=createIoTDeviceAddress("rainfall");
-  value=rainfallCount;
+  value=rainfallCount-rainfallSended;
+  
+  Serial.println(value);
+    
+  if (value < 0) value=0;
 
 }
 #endif
@@ -771,7 +784,7 @@ void readOneWireTempMultible(int & errCount) {
     #endif
 
     #if ENABLE_HTTP
-    publishHttpSensorPayload(errCount,address,temperatureC); 
+    publishHttpSensorPayload(errCount,address,temperatureC, "restapi"); 
     #endif
   }
 }
@@ -1193,9 +1206,9 @@ void serverLog(int & errCount, int & httpCode, String node, String message) {
 }
 
 
-void publishHttpSensorPayload(int & errCount, String address, float value) {
+void publishHttpSensorPayload(int & errCount, String address, float value, String sensorNamespace) {
   String payload="";
-  payload = "{\"sensor_value\":"+String(value)+", \"sensor_id\":\""+address+"\", \"sensor_namespace\":\"restapi\"  }";
+  payload = "{\"sensor_value\":"+String(value)+", \"sensor_id\":\""+address+"\", \"sensor_namespace\":\""+sensorNamespace+"\"  }";
   Serial.println("====================================");
   Serial.println("publishing sensor data via http");
   Serial.println(restApiUrl);
