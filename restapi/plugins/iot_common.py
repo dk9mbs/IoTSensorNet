@@ -1,4 +1,5 @@
 from flask import g
+import datetime
 
 from core.fetchxmlparser import FetchXmlParser
 from core import log
@@ -7,6 +8,23 @@ from services.fetchxml import build_fetchxml_by_alias
 from services.numerictools import isnumeric
 
 logger=log.create_logger(__name__)
+
+def set_node_last_heard(context, node_name):
+    now=datetime.datetime.now()
+    fetch=f"""
+    <restapi type="update">
+        <table name="iot_node"/>
+        <fields>
+            <field name="last_heard_on" value="{now}"/>
+        </fields>
+        <filter>
+            <condition field="name" value="{node_name}" operator="="/>
+        </filter>
+    </restapi>
+    """
+    fetchparser=FetchXmlParser(fetch, context)
+    DatabaseServices.exec(fetchparser, context, run_as_system=True)
+
 
 def get_node_by_node_name(context, node_name):
     fetch=f"""

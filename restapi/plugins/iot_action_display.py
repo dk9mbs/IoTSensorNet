@@ -32,6 +32,7 @@ def execute(context, plugin_context, params):
     display_text=""
 
     rs=iot_common.get_node_by_node_name(context, node_name)
+    iot_common.set_node_last_heard(context, node_name)
 
     if not rs.get_eof():
         display_text=rs.get_result()['display_template']

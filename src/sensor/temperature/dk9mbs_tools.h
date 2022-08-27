@@ -22,4 +22,6 @@ void saveLastErrorCode(int errorCode);
 int getLastErrorCode();
 
 void clearLastErrorCode();
+
+boolean stringToBool(const char* str);
 #endif

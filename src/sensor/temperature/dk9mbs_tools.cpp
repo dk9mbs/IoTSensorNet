@@ -111,3 +111,11 @@ int getLastErrorCode() {
   result.replace("\t", "");
   return result.toInt();
 }
+
+boolean stringToBool(const char* str){
+  if(str=="0") {
+    return false;
+  } else {
+    return true;
+  }
+}

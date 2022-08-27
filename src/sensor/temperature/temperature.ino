@@ -20,20 +20,9 @@
  * v1.5: ssl implemented
  * v1.6: BMP180 sensor implemented
  * v1.7: Rainfall Sensor implemented
+ * v1.8: ESP-now protocol implemented 
 */
-const String nodeVersion="v1.7";
-/*
-#define ENABLE_ONEWIRE true
-#define ENABLE_DHT true
-#define ENABLE_LIGHTNESS false
-#define ENABLE_RAINFALL true
-#define ENABLE_DISPLAY true
-#define ENABLE_MQTT false
-#define ENABLE_HTTP true
-#define ENABLE_OTA true
-#define ENABLE_HTTPS false
-#define ENABLE_BMP false
-*/
+const String nodeVersion="v1.8";
 
 #ifdef ESP32
 #pragma message(THIS EXAMPLE IS FOR ESP8266 ONLY!)
@@ -74,10 +63,14 @@ const String nodeVersion="v1.7";
 #if ENABLE_BMP
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BMP085_U.h>
-
 #define PRESSURE_NULL (1013.25F)
 #define LOCAL_ALTITUDE (138.0F)
 #endif
+
+#if ENABLE_ESPNOW_SUB || ENABLE_ESPNOW_PUB
+#include <espnow.h>
+#endif
+
 
 #define ONEWIREBUSPIN 4
 #define SETUPPIN 5 
@@ -184,8 +177,9 @@ void setup() {
   nodeName=readConfigValue("hostname");
   displayMode=readConfigValue("displaymode").toInt();
   restApiSHAFingerPrint=readConfigValue("hostsha1fingerprint");
-  insecure=readConfigValue("insecure");
-  
+  //insecure=readConfigValue("insecure");
+  insecure=stringToBool(readConfigValue("insecure").c_str());
+
   Serial.println(restApiUrl);
   Serial.println(restApiUser);
   Serial.print("Displaymode:");
@@ -231,6 +225,9 @@ void setup() {
 
     setupWifiSTA(readConfigValue("ssid").c_str(), readConfigValue("password").c_str(), readConfigValue("mac").c_str(), modeDeepSleep);
 
+    #if ENABLE_ESPNOW_SUB || ENABLE_ESPNOW_PUB
+    setupEspNow();
+    #endif
 
     #if ENABLE_HTTPS
     if(insecure==true) {
@@ -394,7 +391,7 @@ void loop() {
         dspValue1="H:"+String(int(valueHum))+"%";
 
         #if ENABLE_MQTT  
-        publishMqttSensorPayload(sensorTopic, addressHum, valueHum);
+        publishMqttSensorPayload(sensorTopic, addressHum, valueHum, "restapi");
         #endif
 
         #if ENABLE_HTTP
@@ -408,7 +405,7 @@ void loop() {
         dspValue2="T:"+String(valueTemp)+"C";
 
         #if ENABLE_MQTT  
-        publishMqttSensorPayload(sensorTopic, addressTemp, valueTemp);
+        publishMqttSensorPayload(sensorTopic, addressTemp, valueTemp, "restapi");
         #endif
 
         #if ENABLE_HTTP
@@ -430,22 +427,26 @@ void loop() {
       #if ENABLE_LIGHTNESS
         readLightness(address, value);
         #if ENABLE_MQTT
-        publishMqttSensorPayload(sensorTopic, address, value);
+        publishMqttSensorPayload(sensorTopic, address, value, "restapi");
         #endif
   
         #if ENABLE_HTTP
-        publishMqttSensorPayload(errCount, address, value);
+        publishHttpSensorPayload(errCount, address, value, "restapi");
         #endif
       #endif
 
       #if ENABLE_RAINFALL
         readRainfall(rainfallCount, rainfallSended, address, value);
         #if ENABLE_MQTT
-        publishMqttSensorPayload(sensorTopic, address, value);
+        publishMqttSensorPayload(sensorTopic, address, value, "sum");
         #endif
   
         #if ENABLE_HTTP
         publishHttpSensorPayload(errCount, address, value, "sum");
+        #endif
+
+        #if ENABLE_ESPNOW_PUB
+        publishEspNowSensorPayload(errCount, address, value, "sum");
         #endif
         
         rainfallSended=rainfallCount;
@@ -467,13 +468,17 @@ void loop() {
         Serial.println("************");
 
         #if ENABLE_MQTT  
-        publishMqttSensorPayload(sensorTopic, addressPressure, p);
+        publishMqttSensorPayload(sensorTopic, addressPressure, p, "restapi");
         #endif
 
         #if ENABLE_HTTP
         publishHttpSensorPayload(errCount, addressPressure,p,"restapi");
         #endif    
-              
+
+        #if ENABLE_ESPNOW_PUB
+        publishEspNowSensorPayload(errCount, addressPressure, p, "restapi");
+        #endif
+                      
       #endif
 
 
@@ -698,9 +703,9 @@ void readRainfall(int rainfallCount, int rainfallSended, String& address, float&
 #endif
 
 #if ENABLE_MQTT
-void publishMqttSensorPayload(Adafruit_MQTT_Publish& topic, String address, float value) {
+void publishMqttSensorPayload(Adafruit_MQTT_Publish& topic, String address, float value, const char* sensorNamespace) {
   String payload="";
-  payload = "{\"value\":"+String(value)+", \"address\":\""+address+"\"}";
+  payload = "{\"value\":"+String(value)+", \"address\":\""+address+"\", \"namespace\":"+sensorNamespace+"\"}";
   topic.publish(payload.c_str());
 }
 #endif
@@ -780,7 +785,7 @@ void readOneWireTempMultible(int & errCount) {
     dtostrf(temperatureC,7, 3, temperaturenow);  //// convert float to char
 
     #if ENABLE_MQTT
-    publishMqttSensorPayload(sensorTopic, address,temperatureC); 
+    publishMqttSensorPayload(sensorTopic, address,temperatureC, "restapi"); 
     #endif
 
     #if ENABLE_HTTP
@@ -1182,6 +1187,77 @@ void reset(int msDelay) {
   while (1);
 }
 
+#if ENABLE_ESPNOW_SUB || ENABLE_ESPNOW_PUB
+typedef struct struct_message {
+    float value;
+    String address;
+    String sensorNamespace;
+} struct_message;
+
+struct_message incomingReadings;
+struct_message DHTReadings;
+uint8_t espNowbroadcastAddress[] = {0xA8, 0x48, 0xFA, 0xC0, 0xAE, 0xAA};
+//a8:48:fa:c0:ae:aa
+void OnDataSent(uint8_t *mac_addr, uint8_t sendStatus) {
+  Serial.println("------------------------------");
+  Serial.println("ESPNOW Status Report");
+  Serial.print("Last Packet Send Status: ");
+  if (sendStatus == 0){
+    Serial.println("Delivery success");
+  }
+  else{
+    Serial.println("Delivery fail");
+  }
+  Serial.println("------------------------------");
+}
+
+void OnDataRecv(uint8_t * mac, uint8_t *incomingData, uint8_t len) {
+  Serial.println("======================================================");
+  Serial.println("ESPNOW receiving ...");
+
+  memcpy(&incomingReadings, incomingData, sizeof(incomingReadings));
+  Serial.print("Bytes received: ");
+  Serial.println(len);
+  Serial.println(incomingReadings.value);
+  Serial.println(incomingReadings.address);
+  Serial.println(incomingReadings.sensorNamespace);
+
+  int errorCount=0;
+  publishHttpSensorPayload(errorCount, "test", incomingReadings.value, incomingReadings.sensorNamespace);
+  
+  Serial.println("======================================================");
+}
+
+void publishEspNowSensorPayload(int & errCount, String address, float value, String sensorNamespace) {
+  String payload="";
+  payload = "{\"sensor_value\":"+String(value)+", \"sensor_id\":\""+address+"\", \"sensor_namespace\":\""+sensorNamespace+"\"  }";
+  Serial.println("====================================");
+  Serial.println("publishing sensor data via espnow");
+
+  DHTReadings.value = value;
+  DHTReadings.address = address;
+  DHTReadings.sensorNamespace=sensorNamespace;
+  esp_now_send(espNowbroadcastAddress, (uint8_t *) &DHTReadings, sizeof(DHTReadings));
+  Serial.println("====================================");
+}
+
+void setupEspNow(){
+    Serial.print("Setup ESP NOW protocol ...");
+    if (esp_now_init() != 0) {
+      Serial.println("Error initializing ESP-NOW");
+      return;
+    } else {
+      Serial.println ("OK");
+    }
+    
+    esp_now_set_self_role(ESP_NOW_ROLE_CONTROLLER);
+    esp_now_register_send_cb(OnDataSent);
+    esp_now_add_peer(espNowbroadcastAddress, ESP_NOW_ROLE_SLAVE, 1, NULL, 0);
+    esp_now_register_recv_cb(OnDataRecv);
+}
+#endif
+
+
 #if ENABLE_HTTP
 void serverLog(int & errCount, int & httpCode, String node, String message) {
   int lastErrorCode=getLastErrorCode();
@@ -1212,7 +1288,7 @@ void publishHttpSensorPayload(int & errCount, String address, float value, Strin
   Serial.println("====================================");
   Serial.println("publishing sensor data via http");
   Serial.println(restApiUrl);
-  
+  Serial.println(payload);
   http.begin(espClient, restApiUrl+"data/iot_sensor_data");
   http.addHeader("username", restApiUser);
   http.addHeader("password", restApiPwd);
@@ -1224,6 +1300,8 @@ void publishHttpSensorPayload(int & errCount, String address, float value, Strin
     Serial.println("Sensordata sended");
   } else {
     Serial.println("cannot transfer sensordata. I will reboot in postprocess"); 
+    Serial.print("HTTP status:");
+    Serial.println(httpCode);    
     errCount++;
     Serial.print("ErrCount:");
     Serial.println(errCount);
@@ -1246,10 +1324,6 @@ void getDisplayData(int & errCount) {
       const String& payload=http.getString();
       const String& line1=payload.substring(0,payload.indexOf(';'));
       const String& line2=payload.substring(payload.indexOf(';')+1,payload.length());
-      
-      //Serial.println(http.getString());
-      //Serial.println(line1);
-      //Serial.println(line2);
       
       printLcd(lcd, 0,0, line1,1);
       printLcd(lcd, 0,1, line2,0);
@@ -1274,6 +1348,7 @@ void printPullData(String command) {
 }
 */
 #endif
+
 
 #if ENABLE_OTA
 void setupOTA(String& hostName) {
