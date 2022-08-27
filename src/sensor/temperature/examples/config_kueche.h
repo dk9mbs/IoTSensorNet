@@ -9,3 +9,6 @@
 #define ENABLE_OTA true
 #define ENABLE_HTTPS true
 #define ENABLE_BMP false
+#define ENABLE_ESPNOW_PUB false
+#define ENABLE_ESPNOW_SUB false
+
