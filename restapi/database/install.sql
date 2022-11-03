@@ -9,6 +9,48 @@ DELETE FROM api_event_handler WHERE solution_id=10000;
 
 INSERT IGNORE INTO api_solution(id,name) VALUES (10000, 'IoTSensorNet');
 
+/* Aktoren */
+DROP TABLE IF EXISTS iot_device;
+DROP TABLE IF EXISTS iot_device_class;
+DROP TABLE IF EXISTS iot_device_vendor;
+
+
+CREATE TABLE IF NOT EXISTS iot_device_vendor(
+    id nvarchar(50) NOT NULL,
+    name nvarchar(50) NOT NULL,
+    PRIMARY KEY(id)
+);
+
+INSERT INTO iot_device_vendor(id, name) VALUES ('tuya','Tuya');
+
+CREATE TABLE IF NOT EXISTS iot_device_class(
+    id nvarchar(50) NOT NULL,
+    name nvarchar(50) NOT NULL,
+    device_vendor_id nvarchar(50) NOT NULL,
+    PRIMARY KEY(id)
+);
+
+INSERT INTO iot_device_class(id, name, device_vendor_id) VALUES ('Bulb','Bulbdevice', 'tuya');
+INSERT INTO iot_device_class(id, name, device_vendor_id) VALUES ('Outlet','Outletdevice', 'tuya');
+
+CREATE TABLE IF NOT EXISTS iot_device(
+    id varchar(100) NOT NULL,
+    name varchar(250) NOT NULL,
+    device_id nvarchar(250) NOT NULL,
+    address nvarchar(50) NOT NULL,
+    local_key nvarchar(100) NOT NULL,
+    version nvarchar(50) NOT NULL,
+    device_class varchar(50) NOT NULL,
+    device_vendor nvarchar(50) NOT NULL,
+    PRIMARY KEY(id)
+);
+
+INSERT INTO iot_device (id,name,device_id,address,local_key,version,device_class, device_vendor) VALUES (
+    'kueche_fenster','Küchenlicht im Fenster','device_id','192.168.2.127', 'local_id','3.3','Bulb','tuya'
+);
+
+/* Ende Aktoren */
+
 CREATE TABLE IF NOT EXISTS iot_location(
     id int NOT NULL AUTO_INCREMENT,
     name varchar(50) NOT NULL,
@@ -69,15 +111,15 @@ CREATE TABLE IF NOT EXISTS iot_sensor (
     id varchar(250) NOT NULL COMMENT 'unique id',
     alias varchar(250) NOT NULL COMMENT 'sensor_id',
     description varchar(250) NOT NULL,
-  last_value decimal(15,4) DEFAULT NULL,
-  last_value_on datetime DEFAULT NULL,
-  min_value decimal(15,4) NOT NULL DEFAULT 0.0000,
-  max_value decimal(15,4) NOT NULL DEFAULT 0.0000,
+    last_value decimal(15,4) DEFAULT NULL,
+    last_value_on datetime DEFAULT NULL,
+    min_value decimal(15,4) NOT NULL DEFAULT 0.0000,
+    max_value decimal(15,4) NOT NULL DEFAULT 0.0000,
     unit varchar(50) NOT NULL default 'unit',
     days_in_history int NOT NULL default '0' COMMENT 'auto delete in days',
     auto_delete_sensor_data smallint NOT NULL default '0' COMMENT '0=yes -1=no',
-  watchdog_warning_sec int(11) DEFAULT NULL COMMENT 'Watchdog warnmeldungen wenn x sec. keine Nachricht',
-  type_id int(11) DEFAULT NULL,
+    watchdog_warning_sec int(11) DEFAULT NULL COMMENT 'Watchdog warnmeldungen wenn x sec. keine Nachricht',
+    type_id int(11) DEFAULT NULL,
     PRIMARY KEY(id),
   FOREIGN KEY (type_id) REFERENCES iot_sensor_type (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
@@ -219,6 +261,18 @@ INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,des
     VALUES
     (10011,'iot_manual_sensor_data_status','iot_manual_sensor_data_status','id','int','name',10000);
 
+INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
+    VALUES
+    (10012,'iot_device','iot_device','id','string','name',10000);
+
+INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
+    VALUES
+    (10013,'iot_device_class','iot_device_class','id','string','name',10000);
+
+INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
+    VALUES
+    (10014,'iot_device_vendor','iot_device_vendor','id','string','name',10000);
+
 
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
@@ -256,6 +310,16 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
     (10000,10011,0,-1,0,10000);
+
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
+    VALUES
+    (10000,10012,0,-1,0,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
+    VALUES
+    (10000,10013,0,-1,0,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
+    VALUES
+    (10000,10014,0,-1,0,10000);
 
 
 
@@ -296,6 +360,16 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
     VALUES
     (10001,10011,-1,-1,-1,-1,10000);
+
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
+    VALUES
+    (10001,10012,-1,-1,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
+    VALUES
+    (10001,10013,-1,-1,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
+    VALUES
+    (10001,10014,-1,-1,-1,-1,10000);
 
 
 
