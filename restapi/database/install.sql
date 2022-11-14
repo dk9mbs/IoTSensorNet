@@ -9,56 +9,122 @@ DELETE FROM api_event_handler WHERE solution_id=10000;
 
 INSERT IGNORE INTO api_solution(id,name) VALUES (10000, 'IoTSensorNet');
 
+CREATE TABLE IF NOT EXISTS iot_location(
+    id int NOT NULL AUTO_INCREMENT,
+    name varchar(50) NOT NULL,
+    local_gateway_url nvarchar(500) NULL COMMENT 'URL for iot Gateway',
+    PRIMARY KEY(id),
+    UNIQUE KEY(name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+ALTER TABLE iot_location ADD COLUMN IF NOT EXISTS local_gateway_url nvarchar(500) NULL COMMENT 'URL for iot Gateway';
+
+INSERT IGNORE INTO iot_location (id,name) VALUES (1,'DEFAULT');
+
+
 /* Aktoren */
+DROP TABLE IF EXISTS iot_device_attribute;
+DROP TABLE IF EXISTS iot_device_routing;
 DROP TABLE IF EXISTS iot_device;
+DROP TABLE IF EXISTS iot_device_categorie_class_mapping;
 DROP TABLE IF EXISTS iot_device_class;
 DROP TABLE IF EXISTS iot_device_vendor;
-
+DROP TABLE IF EXISTS iot_device_status;
 
 CREATE TABLE IF NOT EXISTS iot_device_vendor(
     id nvarchar(50) NOT NULL,
     name nvarchar(50) NOT NULL,
     PRIMARY KEY(id)
-);
+)ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
-INSERT INTO iot_device_vendor(id, name) VALUES ('tuya','Tuya');
+INSERT IGNORE INTO iot_device_vendor(id, name) VALUES ('tuya','Tuya');
 
 CREATE TABLE IF NOT EXISTS iot_device_class(
     id nvarchar(50) NOT NULL,
     name nvarchar(50) NOT NULL,
-    device_vendor_id nvarchar(50) NOT NULL,
     PRIMARY KEY(id)
-);
+)ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
-INSERT INTO iot_device_class(id, name, device_vendor_id) VALUES ('Bulb','Bulbdevice', 'tuya');
-INSERT INTO iot_device_class(id, name, device_vendor_id) VALUES ('Outlet','Outletdevice', 'tuya');
+INSERT INTO iot_device_class(id, name) VALUES ('Bulb','Bulb');
+INSERT INTO iot_device_class(id, name) VALUES ('Outlet','Wall outlet');
 
-CREATE TABLE IF NOT EXISTS iot_device(
-    id varchar(100) NOT NULL,
-    name varchar(250) NOT NULL,
-    device_id nvarchar(250) NOT NULL,
-    address nvarchar(50) NOT NULL,
-    local_key nvarchar(100) NOT NULL,
-    version nvarchar(50) NOT NULL,
-    device_class varchar(50) NOT NULL,
-    device_vendor nvarchar(50) NOT NULL,
-    PRIMARY KEY(id)
-);
-
-INSERT INTO iot_device (id,name,device_id,address,local_key,version,device_class, device_vendor) VALUES (
-    'kueche_fenster','Küchenlicht im Fenster','device_id','192.168.2.127', 'local_id','3.3','Bulb','tuya'
-);
-
-/* Ende Aktoren */
-
-CREATE TABLE IF NOT EXISTS iot_location(
-    id int NOT NULL AUTO_INCREMENT,
+CREATE TABLE IF NOT EXISTS iot_device_status (
+    id varchar(50) NOT NULL,
     name varchar(50) NOT NULL,
-    PRIMARY KEY(id),
-    UNIQUE KEY(name)
+    PRIMARY KEY(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
-INSERT IGNORE INTO iot_location (id,name) VALUES (1,'DEFAULT');
+INSERT IGNORE INTO iot_device_status(id,name) VALUES ('new','New');
+INSERT IGNORE INTO iot_device_status(id,name) VALUES ('active','Active');
+INSERT IGNORE INTO iot_device_status(id,name) VALUES ('disabled','Disabled');
+
+CREATE TABLE IF NOT EXISTS iot_device(
+    id varchar(250) NOT NULL,
+    name varchar(250) NOT NULL,
+    product_id nvarchar(250) NULL,
+    product_name nvarchar(250) NULL,
+    address nvarchar(50) NOT NULL,
+    local_key nvarchar(100) NULL,
+    version nvarchar(50) NOT NULL DEFAULT '0',
+    class_id varchar(50) NULL,
+    category varchar(50) NULL,
+    vendor_id nvarchar(50) NOT NULL,
+    status_id nvarchar(50) NOT NULL DEFAULT 'new',
+    location_id int NOT NULL DEFAULT '1',
+    icon nvarchar(250) NULL,
+    created_on timestamp default CURRENT_TIMESTAMP NOT NULL,
+    last_scan_on timestamp NULL,
+    PRIMARY KEY(id),
+    FOREIGN KEY(status_id) REFERENCES iot_device_status(id),
+    FOREIGN KEY(class_id) REFERENCES iot_device_class(id),
+    FOREIGN KEY(vendor_id) REFERENCES iot_device_vendor(id),
+    FOREIGN KEY(location_id) REFERENCES iot_location(id)
+)ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+CREATE TABLE IF NOT EXISTS iot_device_categorie_class_mapping(
+    id int NOT NULL AUTO_INCREMENT COMMENT '',
+    category nvarchar(50) NOT NULL,
+    class_id nvarchar(50) NOT NULL COMMENT '',
+    vendor_id nvarchar(50) NOT NULL COMMENT '',
+    PRIMARY KEY(id),
+    UNIQUE KEY(category, class_id, vendor_id),
+    FOREIGN KEY(class_id) REFERENCES iot_device_class(id),
+    FOREIGN KEY(vendor_id) REFERENCES iot_device_vendor(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+INSERT IGNORE iot_device_categorie_class_mapping (category, class_id, vendor_id) VALUES ('cz','Outlet','tuya');
+INSERT IGNORE iot_device_categorie_class_mapping (category, class_id, vendor_id) VALUES ('dj','Bulb','tuya');
+
+CREATE TABLE IF NOT EXISTS iot_device_routing(
+    id int NOT NULL AUTO_INCREMENT COMMENT '',
+    internal_device_id nvarchar(250) NOT NULL COMMENT '',
+    external_device_id nvarchar(250) NOT NULL COMMENT '',
+    description varchar(50) NULL COMMENT 'description for this assignment',
+    created_on timestamp default CURRENT_TIMESTAMP NOT NULL,
+    FOREIGN KEY(external_device_id) REFERENCES iot_device(id),
+    PRIMARY KEY(id),
+    UNIQUE KEY(internal_device_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+
+CREATE TABLE IF NOT EXISTS iot_device_attribute(
+    id int NOT NULL AUTO_INCREMENT COMMENT 'Unique key',
+    name nvarchar(100) NOT NULL COMMENT 'Name of the inter status',
+    vendor_id nvarchar(50) NOT NULL COMMENT 'Vendor',
+    class_id nvarchar(50) NULL COMMENT 'Device Class',
+    device_attribute_key nvarchar(250) NOT NULL COMMENT 'The Attribute from the device',
+    created_on timestamp default CURRENT_TIMESTAMP NOT NULL COMMENT 'Created on',
+    PRIMARY KEY(id),
+    UNIQUE KEY(name, vendor_id, class_id),
+    FOREIGN KEY(class_id) REFERENCES iot_device_class(id),
+    FOREIGN KEY(vendor_id) REFERENCES iot_device_vendor(id) 
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+INSERT IGNORE INTO iot_device_attribute (name, vendor_id,class_id, device_attribute_key) VALUES ('power','tuya','Bulb','20');
+INSERT IGNORE INTO iot_device_attribute (name, vendor_id,class_id, device_attribute_key) VALUES ('power','tuya','Outlet','1');
+
+
+/* Ende Aktoren */
 
 CREATE TABLE IF NOT EXISTS iot_node_status(
     id int NOT NULL,
@@ -273,6 +339,27 @@ INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,des
     VALUES
     (10014,'iot_device_vendor','iot_device_vendor','id','string','name',10000);
 
+INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
+    VALUES
+    (10015,'iot_device_status','iot_device_status','id','string','name',10000);
+
+INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
+    VALUES
+    (10016,'iot_device_categorie_class_mapping','iot_device_categorie_class_mapping','id','int','category',10000);
+
+INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
+    VALUES
+    (10017,'iot_device_routing','iot_device_routing','id','int','description',10000);
+
+INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
+    VALUES
+    (10018,'iot_device_attribute','iot_device_attribute','id','int','name',10000);
+
+INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10017, 'ID','id','int','{"disabled": true}');
+INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10017, 'Erstellt am','created_on','datetime','{"disabled": true}');
+INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10018, 'ID','id','int','{"disabled": true}');
+INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10018, 'Erstellt am','created_on','datetime','{"disabled": true}');
+
 
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
@@ -313,13 +400,22 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
-    (10000,10012,0,-1,0,10000);
+    (10000,10012,-1,-1,-1,10000);
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
     (10000,10013,0,-1,0,10000);
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
     (10000,10014,0,-1,0,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
+    VALUES
+    (10000,10015,0,-1,0,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
+    VALUES
+    (10000,10016,0,-1,0,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
+    VALUES
+    (10000,10017,0,-1,0,10000);
 
 
 
@@ -370,6 +466,15 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
     VALUES
     (10001,10014,-1,-1,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
+    VALUES
+    (10001,10015,-1,-1,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
+    VALUES
+    (10001,10016,-1,-1,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
+    VALUES
+    (10001,10017,-1,-1,-1,-1,10000);
 
 
 
@@ -423,6 +528,15 @@ INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) 
 
 INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
 10008,10000,'Status werte Zählerstandserfassung','/ui/v1.0/data/view/iot_manual_sensor_data_status/default',1,10000);
+
+INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
+10009,10000,'Aktoren','/ui/v1.0/data/view/iot_device/default',1,10000);
+
+INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
+10010,10000,'Kategorien Mapping','/ui/v1.0/data/view/iot_device_categorie_class_mapping/default',1,10000);
+
+INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
+10011,10000,'Device Routing','/ui/v1.0/data/view/iot_device_routing/default',1,10000);
 
 
 
@@ -737,3 +851,66 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
         <field name="created_on" table_alias="m" header="Datum"/>
     </select>
 </restapi>');
+
+
+INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml) VALUES (
+10021,'LISTVIEW','default',10012,'id',10000,'<restapi type="select">
+    <table name="iot_device" alias="d"/>
+    <filter type="or">
+        <condition field="name" alias="d" value="$$query$$" operator="$$operator$$"/>
+    </filter>
+    <joins>
+        <join type="inner" table="iot_device_status" alias="s" condition="s.id=d.status_id"/>
+    </joins>
+    <orderby>
+        <field name="created_on" alias="d" sort="DESC"/>
+    </orderby>
+    <select>
+        <field name="id" table_alias="d" alias="id" header="ID"/>
+        <field name="name" table_alias="d" header="Name"/>
+        <field name="address" table_alias="d" header="Adresse"/>
+        <field name="name" alias="status_name" table_alias="s" header="Status"/>
+        <field name="class_id" table_alias="d" header="Geräte Klasse"/>
+        <field name="last_scan_on" table_alias="d" header="Letzter Netzwerk Scan"/>
+    </select>
+</restapi>');
+
+INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml) VALUES (
+10022,'LISTVIEW','default',10016,'id',10000,'<restapi type="select">
+    <table name="iot_device_categorie_class_mapping" alias="m"/>
+    <filter type="or">
+        <condition field="category" alias="m" value="$$query$$" operator="$$operator$$"/>
+    </filter>
+    <orderby>
+        <field name="category" alias="m" sort="ASC"/>
+    </orderby>
+    <select>
+        <field name="id" table_alias="m" alias="id" header="ID"/>
+        <field name="category" table_alias="m" header="Kategorie"/>
+        <field name="class_id" table_alias="m" header="Klasse"/>
+        <field name="vendor_id" table_alias="m" header="Hersteller"/>
+    </select>
+</restapi>');
+
+INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml) VALUES (
+10023,'LISTVIEW','default',10017,'id',10000,'<restapi type="select">
+    <table name="iot_device_routing" alias="r"/>
+    <filter type="or">
+        <condition field="internal_device_id" alias="r" value="$$query$$" operator="$$operator$$"/>
+    </filter>
+    <orderby>
+        <field name="internal_device_id" alias="r" sort="ASC"/>
+    </orderby>
+    <select>
+        <field name="id" table_alias="r" alias="id" header="ID"/>
+        <field name="internal_device_id" table_alias="r" header="Intern"/>
+        <field name="external_device_id" table_alias="r" header="Extern"/>
+        <field name="description" table_alias="r" header="Bemerkung"/>
+        <field name="created_on" table_alias="r" header="Erstellt am"/>
+    </select>
+</restapi>');
+
+
+
+
+
