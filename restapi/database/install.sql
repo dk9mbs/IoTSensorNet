@@ -1,4 +1,4 @@
-DROP TABLE IF EXISTS iot_manual_sensor_data;
+#DROP TABLE IF EXISTS iot_manual_sensor_data;
 
 DELETE FROM api_process_log WHERE event_handler_id IN (SELECT id FROM api_event_handler WHERE solution_id=10000);
 
@@ -23,13 +23,14 @@ INSERT IGNORE INTO iot_location (id,name) VALUES (1,'DEFAULT');
 
 
 /* Aktoren */
-DROP TABLE IF EXISTS iot_device_attribute;
-DROP TABLE IF EXISTS iot_device_routing;
-DROP TABLE IF EXISTS iot_device;
-DROP TABLE IF EXISTS iot_device_categorie_class_mapping;
-DROP TABLE IF EXISTS iot_device_class;
-DROP TABLE IF EXISTS iot_device_vendor;
-DROP TABLE IF EXISTS iot_device_status;
+#DROP TABLE IF EXISTS iot_device_attribute_value;
+#DROP TABLE IF EXISTS iot_device_attribute;
+#DROP TABLE IF EXISTS iot_device_routing;
+#DROP TABLE IF EXISTS iot_device;
+#DROP TABLE IF EXISTS iot_device_categorie_class_mapping;
+#DROP TABLE IF EXISTS iot_device_class;
+#DROP TABLE IF EXISTS iot_device_vendor;
+#DROP TABLE IF EXISTS iot_device_status;
 
 CREATE TABLE IF NOT EXISTS iot_device_vendor(
     id nvarchar(50) NOT NULL,
@@ -45,8 +46,8 @@ CREATE TABLE IF NOT EXISTS iot_device_class(
     PRIMARY KEY(id)
 )ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
-INSERT INTO iot_device_class(id, name) VALUES ('Bulb','Bulb');
-INSERT INTO iot_device_class(id, name) VALUES ('Outlet','Wall outlet');
+INSERT IGNORE INTO iot_device_class(id, name) VALUES ('Bulb','Bulb');
+INSERT IGNORE INTO iot_device_class(id, name) VALUES ('Outlet','Wall outlet');
 
 CREATE TABLE IF NOT EXISTS iot_device_status (
     id varchar(50) NOT NULL,
@@ -109,19 +110,32 @@ CREATE TABLE IF NOT EXISTS iot_device_routing(
 
 CREATE TABLE IF NOT EXISTS iot_device_attribute(
     id int NOT NULL AUTO_INCREMENT COMMENT 'Unique key',
-    name nvarchar(100) NOT NULL COMMENT 'Name of the inter status',
+    name nvarchar(100) NOT NULL COMMENT 'Name of the internal status',
     vendor_id nvarchar(50) NOT NULL COMMENT 'Vendor',
     class_id nvarchar(50) NULL COMMENT 'Device Class',
-    device_attribute_key nvarchar(250) NOT NULL COMMENT 'The Attribute from the device',
+    device_attribute_key nvarchar(250) NOT NULL COMMENT 'The device internal attribute',
+    is_boolean smallint NOT NULL default '0' COMMENT '',
     created_on timestamp default CURRENT_TIMESTAMP NOT NULL COMMENT 'Created on',
     PRIMARY KEY(id),
     UNIQUE KEY(name, vendor_id, class_id),
     FOREIGN KEY(class_id) REFERENCES iot_device_class(id),
-    FOREIGN KEY(vendor_id) REFERENCES iot_device_vendor(id) 
+    FOREIGN KEY(vendor_id) REFERENCES iot_device_vendor(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
-INSERT IGNORE INTO iot_device_attribute (name, vendor_id,class_id, device_attribute_key) VALUES ('power','tuya','Bulb','20');
-INSERT IGNORE INTO iot_device_attribute (name, vendor_id,class_id, device_attribute_key) VALUES ('power','tuya','Outlet','1');
+INSERT IGNORE INTO iot_device_attribute (name, vendor_id,class_id, device_attribute_key, is_boolean) VALUES ('power','tuya','Bulb','20',-1);
+INSERT IGNORE INTO iot_device_attribute (name, vendor_id,class_id, device_attribute_key, is_boolean) VALUES ('power','tuya','Outlet','1',-1);
+
+CREATE TABLE IF NOT EXISTS iot_device_attribute_value(
+    id int NOT NULL AUTO_INCREMENT COMMENT '',
+    device_id varchar(250) NOT NULL COMMENT '',
+    device_attribute_id int NOT NULL COMMENT '',
+    value varchar(250) NULL COMMENT '',
+    created_on timestamp default CURRENT_TIMESTAMP NOT NULL COMMENT 'Created on',
+    UNIQUE KEY(device_id, device_attribute_id),
+    PRIMARY KEY(id),
+    FOREIGN KEY(device_id) REFERENCES iot_device(id),
+    FOREIGN KEY(device_attribute_id) REFERENCES iot_device_attribute(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 
 /* Ende Aktoren */
@@ -355,10 +369,16 @@ INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,des
     VALUES
     (10018,'iot_device_attribute','iot_device_attribute','id','int','name',10000);
 
+INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
+    VALUES
+    (10019,'iot_device_attribute_value','iot_device_attribute_value','id','int','name',10000);
+
 INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10017, 'ID','id','int','{"disabled": true}');
 INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10017, 'Erstellt am','created_on','datetime','{"disabled": true}');
 INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10018, 'ID','id','int','{"disabled": true}');
 INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10018, 'Erstellt am','created_on','datetime','{"disabled": true}');
+INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10019, 'Erstellt am','created_on','datetime','{"disabled": true}');
+INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10019, 'ID','id','datetime','{"disabled": true}');
 
 
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
@@ -415,7 +435,10 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
     (10000,10016,0,-1,0,10000);
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
-    (10000,10017,0,-1,0,10000);
+    (10000,10018,0,-1,0,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
+    VALUES
+    (10000,10018,0,-1,0,10000);
 
 
 
@@ -475,30 +498,39 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
     VALUES
     (10001,10017,-1,-1,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
+    VALUES
+    (10001,10018,-1,-1,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
+    VALUES
+    (10001,10019,-1,-1,-1,-1,10000);
 
 
 
 INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,solution_id) 
     VALUES ('iot_sensor_routing','iot_sensor_data','insert','before',90,10000);
 
-INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,solution_id) 
+INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,solution_id)
     VALUES ('iot_setlast_value','iot_sensor_data','insert','before',100,10000);
 
-INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,solution_id) 
+INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,solution_id)
     VALUES ('iot_set_node_status','iot_log','insert','before',100,10000);
 
-INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,solution_id) 
+INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,solution_id)
     VALUES ('iot_action_display','iot_get_node_display_text','execute','before',100,10000);
 
-INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,solution_id) 
+INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,solution_id)
     VALUES ('iot_app_start','$app_start','execute','before',100,10000);
 
-INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,run_async,solution_id) 
+INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,run_async,solution_id)
     VALUES ('iot_pl_man_sensor_data','iot_manual_sensor_data','insert','after',100,-1,10000);
 
+INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,run_async,solution_id)
+    VALUES ('iot_action_gw','iot_action_gw','execute','before',100,0,10000);
 
 
-INSERT IGNORE INTO api_ui_app (id, name,description,home_url,solution_id) 
+
+INSERT IGNORE INTO api_ui_app (id, name,description,home_url,solution_id)
 VALUES (
 10000,'IoT Service App','System Verwaltungs App','/ui/v1.0/data/view/iot_sensor/default?app_id=10000',10000);
 
