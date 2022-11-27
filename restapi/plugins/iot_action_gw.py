@@ -22,6 +22,9 @@ def __validate(params):
 
     return True
 
+def config():
+    return {"raise_exception": True}
+
 def execute(context, plugin_context, params):
     if not __validate(params):
         logger.warning(f"Missings params")
@@ -69,7 +72,7 @@ def __get_location_url(context, device_id):
     </select>
     </restapi>"""
     fetchparser=FetchXmlParser(fetch_xml, context)
-    rs=DatabaseServices.exec(fetchparser, context, fetch_mode=1, run_as_system=True)
+    rs=DatabaseServices.exec(fetchparser, context, fetch_mode=1, run_as_system=False)
 
     if rs.get_eof():
         raise Exception(f"Location for {device_id} not found!")
