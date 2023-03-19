@@ -92,7 +92,7 @@ def __create_routing(context,internal_sensor_id, external_sensor_id):
 
     fetch=f"""
     <restapi type="insert">
-        <table name="iot_sensor_routing" alias="sr"/>
+        <table name="iot_sensor_routing"/>
         <fields>
             <field name="internal_sensor_id" value="{internal_sensor_id}" />
             <field name="external_sensor_id" value="{external_sensor_id}" />
@@ -111,7 +111,7 @@ def __set_last_value_on(context,external_sensor_id):
 
     fetch=f"""
     <restapi type="update">
-        <table name="iot_sensor_routing" alias="sr"/>
+        <table name="iot_sensor_routing"/>
         <fields>
             <field name="last_value_on" value="{now}" />
         </fields>
