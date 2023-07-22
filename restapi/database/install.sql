@@ -176,6 +176,22 @@ CREATE TABLE IF NOT EXISTS iot_sensor_data(
 
 ALTER TABLE iot_sensor_data ADD INDEX IF NOT EXISTS sensor_id_created_on (sensor_id, created_on);
 
+/*
+Start Archiv
+*/
+CREATE TABLE IF NOT EXISTS iot_sensor_data_archiv(
+    id int NOT NULL,
+    sensor_id varchar(250) NOT NULL,
+    sensor_namespace varchar(500) NOT NULL,
+    sensor_value numeric(15,4) NOT NULL,
+    created_on timestamp default CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY(id),
+    INDEX (sensor_id, created_on)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+/*
+Ende Archiv
+*/
 
 CREATE TABLE IF NOT EXISTS iot_sensor_type(
     id int NOT NULL,
