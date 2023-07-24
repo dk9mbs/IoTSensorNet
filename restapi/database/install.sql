@@ -228,6 +228,7 @@ ALTER TABLE iot_sensor ADD CONSTRAINT  FOREIGN KEY IF NOT EXISTS (type_id) REFER
 ALTER TABLE iot_sensor ADD COLUMN IF NOT EXISTS notify smallint NOT NULL DEFAULT '-1' COMMENT 'Notify in case of watchdog errors';
 
 
+
 call api_proc_create_table_field_instance(10001,100, 'id','ID','string',1,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10001,200, 'alias','Alias','string',1,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10001,300, 'description','Bezeichnung','dcimal',14,'{"disabled": false}', @out_value);
