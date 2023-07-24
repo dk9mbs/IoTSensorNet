@@ -156,8 +156,11 @@ CREATE TABLE IF NOT EXISTS iot_node (
     ip_address varchar(50) NULL,
     last_heard_on timestamp NULL,
     status_id int NOT NULL DEFAULT '0',
+    location_id int NULL,
+    display_template text NULL,
     PRIMARY KEY(id),
     FOREIGN KEY(status_id) REFERENCES iot_node_status(id),
+    FOREIGN KEY(location_id) REFERENCES iot_location(id),
     UNIQUE KEY(name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
@@ -172,9 +175,8 @@ CREATE TABLE IF NOT EXISTS iot_sensor_data(
     sensor_value numeric(15,4) NOT NULL,
     created_on timestamp default CURRENT_TIMESTAMP NOT NULL,
     PRIMARY KEY(id)
+    INDEX (sensor_id, created_on),
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-
-ALTER TABLE iot_sensor_data ADD INDEX IF NOT EXISTS sensor_id_created_on (sensor_id, created_on);
 
 /*
 Start Archiv
@@ -216,14 +218,30 @@ CREATE TABLE IF NOT EXISTS iot_sensor (
     auto_delete_sensor_data smallint NOT NULL default '0' COMMENT '0=yes -1=no',
     watchdog_warning_sec int(11) DEFAULT NULL COMMENT 'Watchdog warnmeldungen wenn x sec. keine Nachricht',
     type_id int(11) DEFAULT NULL,
+    notify smallint NOT NULL DEFAULT '-1' COMMENT 'Notify in case of watchdog errors',
     PRIMARY KEY(id),
-  FOREIGN KEY (type_id) REFERENCES iot_sensor_type (id)
+    FOREIGN KEY (type_id) REFERENCES iot_sensor_type (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-
-
 
 ALTER TABLE iot_sensor ADD COLUMN IF NOT EXISTS type_id int NULL;
 ALTER TABLE iot_sensor ADD CONSTRAINT  FOREIGN KEY IF NOT EXISTS (type_id) REFERENCES iot_sensor_type (id);
+ALTER TABLE iot_sensor ADD COLUMN IF NOT EXISTS notify smallint NOT NULL DEFAULT '-1' COMMENT 'Notify in case of watchdog errors';
+
+
+call api_proc_create_table_field_instance(10001,100, 'id','ID','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,200, 'alias','Alias','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,300, 'description','Bezeichnung','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,400, 'last_value','Letzter Wert','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,500, 'last_value_on','Letzter Wert von','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,600, 'min_value','Min. Wert','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,700, 'max_value','Max. Wert','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,800, 'unit','Einheit','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,900, 'days_in_history','Messwerte aufbewaren (in Tagen)','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,1000, 'auto_delete_sensor_data','Messwerte automatisch löschen','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,1100, 'watchdog_warning_sec','Watchdog in Sek.','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,1200, 'type_id','Typ','int',2,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,1300, 'notify','Benachrichtigungen','int',19,'{"disabled": false}', @out_value);
+
 
 
 CREATE TABLE IF NOT EXISTS iot_sensor_routing_status(
