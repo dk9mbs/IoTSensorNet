@@ -231,7 +231,7 @@ ALTER TABLE iot_sensor ADD COLUMN IF NOT EXISTS notify smallint NOT NULL DEFAULT
 
 call api_proc_create_table_field_instance(10001,100, 'id','ID','string',1,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10001,200, 'alias','Alias','string',1,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10001,300, 'description','Bezeichnung','dcimal',14,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,300, 'description','Bezeichnung','string',1,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10001,400, 'last_value','Letzter Wert','decimal',14,'{"disabled": true}', @out_value);
 call api_proc_create_table_field_instance(10001,500, 'last_value_on','Letzter Wert von','datetime',9,'{"disabled": true}', @out_value);
 call api_proc_create_table_field_instance(10001,600, 'min_value','Min. Wert','decimal',14,'{"disabled": false}', @out_value);
