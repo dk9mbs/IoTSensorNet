@@ -174,8 +174,8 @@ CREATE TABLE IF NOT EXISTS iot_sensor_data(
     sensor_namespace varchar(500) NOT NULL,
     sensor_value numeric(15,4) NOT NULL,
     created_on timestamp default CURRENT_TIMESTAMP NOT NULL,
-    PRIMARY KEY(id)
-    INDEX (sensor_id, created_on),
+    PRIMARY KEY(id),
+    INDEX (sensor_id, created_on)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 /*
@@ -230,17 +230,17 @@ ALTER TABLE iot_sensor ADD COLUMN IF NOT EXISTS notify smallint NOT NULL DEFAULT
 
 call api_proc_create_table_field_instance(10001,100, 'id','ID','string',1,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10001,200, 'alias','Alias','string',1,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10001,300, 'description','Bezeichnung','string',1,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10001,400, 'last_value','Letzter Wert','string',1,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10001,500, 'last_value_on','Letzter Wert von','string',1,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10001,600, 'min_value','Min. Wert','string',1,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10001,700, 'max_value','Max. Wert','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,300, 'description','Bezeichnung','dcimal',14,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,400, 'last_value','Letzter Wert','decimal',14,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10001,500, 'last_value_on','Letzter Wert von','datetime',9,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10001,600, 'min_value','Min. Wert','decimal',14,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,700, 'max_value','Max. Wert','decimal',14,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10001,800, 'unit','Einheit','string',1,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10001,900, 'days_in_history','Messwerte aufbewaren (in Tagen)','string',1,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10001,1000, 'auto_delete_sensor_data','Messwerte automatisch löschen','string',1,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10001,1100, 'watchdog_warning_sec','Watchdog in Sek.','string',1,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10001,1200, 'type_id','Typ','int',2,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10001,1300, 'notify','Benachrichtigungen','int',19,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,900, 'days_in_history','Messwerte aufbewaren (in Tagen)','int',14,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,1000, 'auto_delete_sensor_data','Messwerte automatisch löschen','int',19,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,1100, 'watchdog_warning_sec','Watchdog in Sek.','int',14,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,1200, 'type_id','Typ','int',19,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,1300, 'notify','Benachrichtigungen','int',2,'{"disabled": false}', @out_value);
 
 
 
