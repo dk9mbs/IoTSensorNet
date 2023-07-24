@@ -240,8 +240,8 @@ call api_proc_create_table_field_instance(10001,800, 'unit','Einheit','string',1
 call api_proc_create_table_field_instance(10001,900, 'days_in_history','Messwerte aufbewaren (in Tagen)','int',14,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10001,1000, 'auto_delete_sensor_data','Messwerte automatisch löschen','int',19,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10001,1100, 'watchdog_warning_sec','Watchdog in Sek.','int',14,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10001,1200, 'type_id','Typ','int',19,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10001,1300, 'notify','Benachrichtigungen','int',2,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,1200, 'type_id','Typ','int',2,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,1300, 'notify','Benachrichtigungen','int',19,'{"disabled": false}', @out_value);
 
 
 
