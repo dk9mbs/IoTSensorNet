@@ -1,4 +1,4 @@
-class Iot_DewPoint:
+class iot_LibDewPoint:
     def __init__(self, celsius, humidity):
         self._celsius=celsius
         self._humidity=humidity

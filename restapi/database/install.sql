@@ -1,7 +1,4 @@
-#DROP TABLE IF EXISTS iot_manual_sensor_data;
-
 DELETE FROM api_process_log WHERE event_handler_id IN (SELECT id FROM api_event_handler WHERE solution_id=10000);
-
 DELETE FROM api_ui_app_nav_item WHERE solution_id=10000;
 DELETE FROM api_ui_app WHERE solution_id=10000;
 DELETE FROM api_table_view WHERE solution_id=10000;
@@ -39,6 +36,7 @@ CREATE TABLE IF NOT EXISTS iot_device_vendor(
 )ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 INSERT IGNORE INTO iot_device_vendor(id, name) VALUES ('tuya','Tuya');
+INSERT IGNORE INTO iot_device_vendor(id, name) VALUES ('shelly','Shelly');
 
 CREATE TABLE IF NOT EXISTS iot_device_class(
     id nvarchar(50) NOT NULL,
@@ -227,24 +225,6 @@ ALTER TABLE iot_sensor ADD COLUMN IF NOT EXISTS type_id int NULL;
 ALTER TABLE iot_sensor ADD CONSTRAINT  FOREIGN KEY IF NOT EXISTS (type_id) REFERENCES iot_sensor_type (id);
 ALTER TABLE iot_sensor ADD COLUMN IF NOT EXISTS notify smallint NOT NULL DEFAULT '-1' COMMENT 'Notify in case of watchdog errors';
 
-
-
-call api_proc_create_table_field_instance(10001,100, 'id','ID','string',1,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10001,200, 'alias','Alias','string',1,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10001,300, 'description','Bezeichnung','string',1,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10001,400, 'last_value','Letzter Wert','decimal',14,'{"disabled": true}', @out_value);
-call api_proc_create_table_field_instance(10001,500, 'last_value_on','Letzter Wert von','datetime',9,'{"disabled": true}', @out_value);
-call api_proc_create_table_field_instance(10001,600, 'min_value','Min. Wert','decimal',14,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10001,700, 'max_value','Max. Wert','decimal',14,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10001,800, 'unit','Einheit','string',1,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10001,900, 'days_in_history','Messwerte aufbewaren (in Tagen)','int',14,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10001,1000, 'auto_delete_sensor_data','Messwerte automatisch löschen','int',19,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10001,1100, 'watchdog_warning_sec','Watchdog in Sek.','int',14,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10001,1200, 'type_id','Typ','int',2,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10001,1300, 'notify','Benachrichtigungen','int',19,'{"disabled": false}', @out_value);
-
-
-
 CREATE TABLE IF NOT EXISTS iot_sensor_routing_status(
     id int NOT NULL,
     name varchar(50) NOT NULL,
@@ -415,6 +395,20 @@ INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) 
 INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10019, 'Erstellt am','created_on','datetime','{"disabled": true}');
 INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10019, 'ID','id','datetime','{"disabled": true}');
 
+call api_proc_create_table_field_instance(10001,100, 'id','ID','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,200, 'alias','Alias','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,300, 'description','Bezeichnung','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,400, 'last_value','Letzter Wert','decimal',14,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10001,500, 'last_value_on','Letzter Wert von','datetime',9,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10001,600, 'min_value','Min. Wert','decimal',14,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,700, 'max_value','Max. Wert','decimal',14,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,800, 'unit','Einheit','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,900, 'days_in_history','Messwerte aufbewaren (in Tagen)','int',14,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,1000, 'auto_delete_sensor_data','Messwerte automatisch löschen','int',19,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,1100, 'watchdog_warning_sec','Watchdog in Sek.','int',14,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,1200, 'type_id','Typ','int',2,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,1300, 'notify','Benachrichtigungen','int',19,'{"disabled": false}', @out_value);
+
 
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
@@ -542,26 +536,29 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 
 
 
-INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,solution_id) 
-    VALUES ('iot_sensor_routing','iot_sensor_data','insert','before',90,10000);
+INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,solution_id) 
+    VALUES (10000001,'iot_sensor_routing','iot_sensor_data','insert','before',90,10000);
 
-INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,solution_id)
-    VALUES ('iot_setlast_value','iot_sensor_data','insert','before',100,10000);
+INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,solution_id)
+    VALUES (10000002,'iot_setlast_value','iot_sensor_data','insert','before',100,10000);
 
-INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,solution_id)
-    VALUES ('iot_set_node_status','iot_log','insert','before',100,10000);
+INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,solution_id)
+    VALUES (10000003,'iot_set_node_status','iot_log','insert','before',100,10000);
 
-INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,solution_id)
-    VALUES ('iot_action_display','iot_get_node_display_text','execute','before',100,10000);
+INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,solution_id)
+    VALUES (10000004,'iot_action_display','iot_get_node_display_text','execute','before',100,10000);
 
-INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,solution_id)
-    VALUES ('iot_app_start','$app_start','execute','before',100,10000);
+INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,solution_id)
+    VALUES (10000005,'iot_app_start','$app_start','execute','before',100,10000);
 
-INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,run_async,solution_id)
-    VALUES ('iot_pl_man_sensor_data','iot_manual_sensor_data','insert','after',100,-1,10000);
+INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,run_async,solution_id)
+    VALUES (10000006,'iot_pl_man_sensor_data','iot_manual_sensor_data','insert','after',100,-1,10000);
 
-INSERT IGNORE INTO api_event_handler (plugin_module_name,publisher,event,type,sorting,run_async,solution_id)
-    VALUES ('iot_action_gw','iot_action_gw','execute','before',100,0,10000);
+INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,run_async,solution_id)
+    VALUES (10000007,'iot_action_gw','iot_action_gw','execute','before',100,0,10000);
+
+INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,run_async,solution_id)
+    VALUES (10000008,'iot_action_shelly_mqtt','iot_action_shelly_mqtt','execute','before',100,0,10000);
 
 
 
