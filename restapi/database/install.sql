@@ -73,12 +73,18 @@ CREATE TABLE IF NOT EXISTS iot_device(
     icon nvarchar(250) NULL,
     created_on timestamp default CURRENT_TIMESTAMP NOT NULL,
     last_scan_on timestamp NULL,
+    network_ssid varchar(250) NULL,
+    network_rssi int NOT NULL DEFAULT '0',
     PRIMARY KEY(id),
     FOREIGN KEY(status_id) REFERENCES iot_device_status(id),
     FOREIGN KEY(class_id) REFERENCES iot_device_class(id),
     FOREIGN KEY(vendor_id) REFERENCES iot_device_vendor(id),
     FOREIGN KEY(location_id) REFERENCES iot_location(id)
 )ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+ALTER TABLE iot_device ADD COLUMN IF NOT EXISTS network_ssid varchar(250) NULL;
+ALTER TABLE iot_device ADD COLUMN IF NOT EXISTS network_rssi int NOT NULL DEFAULT '0';
+
 
 CREATE TABLE IF NOT EXISTS iot_device_categorie_class_mapping(
     id int NOT NULL AUTO_INCREMENT COMMENT '',
@@ -408,6 +414,27 @@ call api_proc_create_table_field_instance(10001,1000, 'auto_delete_sensor_data',
 call api_proc_create_table_field_instance(10001,1100, 'watchdog_warning_sec','Watchdog in Sek.','int',14,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10001,1200, 'type_id','Typ','int',2,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10001,1300, 'notify','Benachrichtigungen','int',19,'{"disabled": false}', @out_value);
+
+/* iot_device */
+call api_proc_create_table_field_instance(10012,100, 'id','ID','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10012,200, 'name','Bezeichnung','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10012,300, 'product_id','Product ID (Hersteller)','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10012,400, 'product_name','Product Name (Hersteller)','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10012,500, 'address','Adresse','adresse',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10012,600, 'local_key','Lokaler Key (API)','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10012,700, 'version','Version','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10012,800, 'class_id','Klasse','string',2,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10012,900, 'category','Kategorie','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10012,1000, 'vendor_id','Hersteller','string',2,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10012,1100, 'status_id','Status','string',2,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10012,1200, 'location_id','Standort','int',2,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10012,1300, 'icon','Icon','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10012,1400, 'created_on','Erstellt am','datetime',9,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10012,1500, 'last_scan_on','Letzter Scan','datetime',9,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10012,1600, 'network_ssid','Netzwerk SSID','string',1,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10012,1700, 'network_rssi','RSSI (Netzwerk)','int',14,'{"disabled": true}', @out_value);
+
+
 
 
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)

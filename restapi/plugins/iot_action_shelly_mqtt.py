@@ -1,13 +1,13 @@
 import datetime
 import requests
 import json
-import paho.mqtt.client as mqtt
 
 from core.fetchxmlparser import FetchXmlParser
 from services.database import DatabaseServices
 from core import log, jsontools
 from core.setting import Setting
 from shared.model import *
+from services.mqtt_client import MqttClient
 
 logger=log.create_logger(__name__)
 
@@ -36,26 +36,37 @@ def execute(context, plugin_context, params):
     now=datetime.datetime.now()
     config=plugin_context['config']
 
-    device=params['input']['device']
+    device_id=params['input']['device']
     command=params['input']['command']
     value=params['input']['value']
     session_id=params['input']['session_id']
 
-    device_model=iot_device.objects(context).select().where(iot_device.id==device).to_entity()
-    if device_model == None:
-        logger.error(f"Device not found: {device}")
-        raise Exception(f"Device not found: {device}")
+    if value=='on':
+        value="true"
+    else:
+        value="false"
 
-    username=Setting.get_value(context, "mqtt.username","username")
-    password=Setting.get_value(context, "mqtt.password","password")
-    host=Setting.get_value(context, "mqtt.host","mqtt.host.de")
-    port=int(Setting.get_value(context, "mqtt.port",1883))
+    #mosquitto_pub -h dk9mbs.de -u dk9mbs -P messwert -p 1883 -t shellyplus1-441793ccf49c/rpc -m 
+    # '{"id":0, "src":"trockner/status", "method":"Switch.Set", "params":{"id":0,"on":true}}'
+    #
+    #mosquitto_pub -h dk9mbs.de -u dk9mbs -P messwert -p 1883 -t shellyplus1-441793ccf49c/rpc -m 
+    # '{"id":123, "src":"mynewtopic", "method":"Shelly.GetStatus"}'
 
-    client=mqtt.Client()
-    client.username_pw_set(username=username, password=password)
-    client.connect(host, port)
-    client.publish("test/hallo", "on")
-    client.disconnect()
+    routing=iot_device_routing.objects(context).select().where(iot_device_routing.internal_device_id==device_id).to_entity()
+    if routing==None:
+        logger.error(f"Devicerouting not found: {device_id}")
+        raise Exception(f"Devicerouting not found: {device_id}")
+
+    device=iot_device.objects(context).select().where(iot_device.id==routing.external_device_id.value).to_entity()
+    if device == None:
+        logger.error(f"Device not found: {device_id}")
+        raise Exception(f"Device not found: {device_id}")
+
+
+    with MqttClient(context) as client:
+        payload='{"id":0, "src":"dk9mbs/shelly/status", "method":"Switch.Set", "params":{"id":0,"on":'+value+'}}'
+        topic=f"{device.id.value}/rpc"
+        client.publish(topic, payload)
 
     params['output']['status_code']=200
     params['output']['payload']="OK"
