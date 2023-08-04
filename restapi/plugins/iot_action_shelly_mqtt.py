@@ -46,10 +46,10 @@ def execute(context, plugin_context, params):
     else:
         value="false"
 
-    #mosquitto_pub -h dk9mbs.de -u dk9mbs -P messwert -p 1883 -t shellyplus1-441793ccf49c/rpc -m 
+    #mosquitto_pub -h dk9mbs.de -u user -P password -p 1883 -t shellyplus1-441793ccf49c/rpc -m 
     # '{"id":0, "src":"trockner/status", "method":"Switch.Set", "params":{"id":0,"on":true}}'
     #
-    #mosquitto_pub -h dk9mbs.de -u dk9mbs -P messwert -p 1883 -t shellyplus1-441793ccf49c/rpc -m 
+    #mosquitto_pub -h dk9mbs.de -u user -P password -p 1883 -t shellyplus1-441793ccf49c/rpc -m 
     # '{"id":123, "src":"mynewtopic", "method":"Shelly.GetStatus"}'
 
     routing=iot_device_routing.objects(context).select().where(iot_device_routing.internal_device_id==device_id).to_entity()
