@@ -64,7 +64,7 @@ def execute(context, plugin_context, params):
 
 
     with MqttClient(context) as client:
-        payload='{"id":0, "src":"dk9mbs/shelly/status", "method":"Switch.Set", "params":{"id":0,"on":'+value+'}}'
+        payload='{"id":0, "src":"iot_restapi/shelly/status", "method":"Switch.Set", "params":{"id":0,"on":'+value+'}}'
         topic=f"{device.id.value}/rpc"
         client.publish(topic, payload)
 
