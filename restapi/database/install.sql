@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS iot_device_class(
 
 INSERT IGNORE INTO iot_device_class(id, name) VALUES ('Bulb','Bulb');
 INSERT IGNORE INTO iot_device_class(id, name) VALUES ('Outlet','Wall outlet');
+INSERT IGNORE INTO iot_device_class(id, name) VALUES ('shellyplus1','Shelly Relais, 1 Kanal 16A');
 
 CREATE TABLE IF NOT EXISTS iot_device_status (
     id varchar(50) NOT NULL,
@@ -128,6 +129,7 @@ CREATE TABLE IF NOT EXISTS iot_device_attribute(
 
 INSERT IGNORE INTO iot_device_attribute (name, vendor_id,class_id, device_attribute_key, is_boolean) VALUES ('power','tuya','Bulb','20',-1);
 INSERT IGNORE INTO iot_device_attribute (name, vendor_id,class_id, device_attribute_key, is_boolean) VALUES ('power','tuya','Outlet','1',-1);
+INSERT IGNORE INTO iot_device_attribute (name, vendor_id,class_id, device_attribute_key, is_boolean) VALUES ('power','shelly','shellyplus1','on',-1);
 
 CREATE TABLE IF NOT EXISTS iot_device_attribute_value(
     id int NOT NULL AUTO_INCREMENT COMMENT '',
@@ -587,6 +589,8 @@ INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type
 INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,run_async,solution_id)
     VALUES (10000008,'iot_action_shelly_mqtt','iot_action_shelly_mqtt','execute','before',100,0,10000);
 
+INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,run_async,solution_id)
+    VALUES (10000009,'iot_plugin_shelly_value','iot_shelly','mqtt_message','after',100,0,10000);
 
 
 INSERT IGNORE INTO api_ui_app (id, name,description,home_url,solution_id)
