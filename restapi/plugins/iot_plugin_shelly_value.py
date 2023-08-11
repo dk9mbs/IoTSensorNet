@@ -16,6 +16,8 @@ def __validate(params):
         return False
     if 'params' not in params['data']:
         return False
+    if 'topic' not in params:
+        return False
 
     return True
 
@@ -27,7 +29,14 @@ def execute(context, plugin_context, params):
 
     shelly_method=params['data']['method']
     shelly_params=params['data']['params']
-    shelly_id=params['data']['id']
+    shelly_internal_id=params['data']['id']
+    shelly_topic=params['topic']
+    shelly_external_id=shelly_topic.split("/")[0]
+    shelly_value=shelly_params['on']
+    internal_value="off"
+
+    if shelly_value==True:
+        internal_value="on"
 
     if shelly_method!="Switch.Set":
         logger.info(f"Method is not for me: {shelly_method}")
@@ -38,11 +47,15 @@ def execute(context, plugin_context, params):
     if device_attr==None:
         raise Exception(f"iot_device_attribute not found: name:power vendor_id:shelly class_id:shellyplus1")
 
-    device_attr_val=iot_device_attribute_value.objects(context).select().where(iot_device_attribute_value.device_id=="test").to_entity()
+    device_attr_val=iot_device_attribute_value.objects(context).select().where(iot_device_attribute_value.device_id==shelly_external_id) \
+        .where(iot_device_attribute_value.device_attribute_id==device_attr.id.value).to_entity()
+    
     if device_attr_val==None:
         device_attr_val=iot_device_attribute_value()
-        device_attr_val.device_id.value=""
+        device_attr_val.device_id.value=shelly_external_id
         device_attr_val.device_attribute_id.value=device_attr.id.value
-        device_attr_val.value.value=shelly_params['on']
+        device_attr_val.value.value=internal_value
         device_attr_val.insert(context)
-
+    else:
+        device_attr_val.value.value=internal_value
+        device_attr_val.update(context)
