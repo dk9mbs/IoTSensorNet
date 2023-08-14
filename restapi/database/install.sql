@@ -592,6 +592,11 @@ INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type
 INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,run_async,solution_id)
     VALUES (10000009,'iot_plugin_shelly_sub_switsh_set','iot_shelly','mqtt_message','after',100,0,10000);
 
+INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,run_async,solution_id)
+    VALUES (10000010,'iot_action_device_switch','iot_action_device_switch','execute','before',100,0,10000);
+
+
+
 
 INSERT IGNORE INTO api_ui_app (id, name,description,home_url,solution_id)
 VALUES (
