@@ -2,6 +2,7 @@ import datetime
 import requests
 import json
 
+import plugins
 from core.fetchxmlparser import FetchXmlParser
 from services.database import DatabaseServices
 from core import log, jsontools
