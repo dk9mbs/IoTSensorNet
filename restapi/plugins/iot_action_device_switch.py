@@ -2,8 +2,8 @@ import datetime
 import requests
 import json
 
-from plugins import iot_action_gw
-from plugins import iot_action_shelly_mqtt
+import plugins.iot_action_gw
+import plugins.iot_action_shelly_mqtt
 
 from core.fetchxmlparser import FetchXmlParser
 from services.database import DatabaseServices
@@ -42,7 +42,7 @@ def execute(context, plugin_context, params):
     device=iot_device.objects(context).select().where(iot_device.id==routing.external_device_id.value).to_entity()
 
     if device.vendor_id=='tuya':
-        iot_action_gw.execute(context, plugin_context, params)
+        plugins.iot_action_gw.execute(context, plugin_context, params)
     elif device.vendor_id=='shelly':
-        iot_action_shelly_mqtt.execute(context, plugin_context, params)
+        plugins.iot_action_shelly_mqtt.execute(context, plugin_context, params)
 
