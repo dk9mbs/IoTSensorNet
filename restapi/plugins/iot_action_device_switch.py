@@ -31,13 +31,12 @@ def execute(context, plugin_context, params):
         logger.warning(f"Missings params")
         return
 
-    routing=iot_device_routing.select().where(iot_device_routing.internal_device_id==params['device']). \
+    routing=iot_device_routing.objects(context).select().where(iot_device_routing.internal_device_id==params['device']). \
         to_entity()
 
     if routing==None:
         raise Exception(f"Routing not found for device: {params['device']}")
-
-    device=iot_device.select().where(iot_device.id==routing.external_device_id.value).to_entity()
+    device=iot_device.objects(context).select().where(iot_device.id==routing.external_device_id.value).to_entity()
 
     if device.vendor_id=='tuya':
         action=plugins.iot_action_gw()
