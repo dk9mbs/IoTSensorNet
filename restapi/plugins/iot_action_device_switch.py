@@ -41,8 +41,9 @@ def execute(context, plugin_context, params):
         raise Exception(f"Routing not found for device: {params['input']['device']}")
     device=iot_device.objects(context).select().where(iot_device.id==routing.external_device_id.value).to_entity()
 
-    if device.vendor_id=='tuya':
+    logger.info(f"Vendor: {device.vendor_id.value}")
+    if device.vendor_id.value=='tuya':
         plugins.iot_action_gw.execute(context, plugin_context, params)
-    elif device.vendor_id=='shelly':
+    elif device.vendor_id.value=='shelly':
         plugins.iot_action_shelly_mqtt.execute(context, plugin_context, params)
 
