@@ -595,6 +595,8 @@ INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type
 INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,run_async,solution_id)
     VALUES (10000010,'iot_action_device_switch','iot_action_device_switch','execute','before',100,0,10000);
 
+INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,run_async,solution_id)
+    VALUES (10000011,'iot_Plugin_add_portal_params','iot_demo','render_portal_content','before',100,0,10000);
 
 
 
