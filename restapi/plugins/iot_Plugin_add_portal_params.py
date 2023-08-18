@@ -19,7 +19,7 @@ def execute(context, plugin_context, params):
     if not __validate(params):
         logger.warning(f"Missings params {params}")
         return
-    print("**********************************************************************")
+
     icon="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSINM0jv55Gjz5RyFDJgJJlDtCx7ocTVAfP5AWKWI_cMbbC7PCU0RjTwyMZqwaobM4VZkQ&usqp=CAU"
 
     params['params']['iot_items']=[
