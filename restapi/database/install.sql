@@ -106,12 +106,16 @@ CREATE TABLE IF NOT EXISTS iot_device_routing(
     internal_device_id nvarchar(250) NOT NULL COMMENT '',
     external_device_id nvarchar(250) NOT NULL COMMENT '',
     description varchar(50) NULL COMMENT 'description for this assignment',
+    show_dashboard smallint NOT NULL DEFAULT '-1' COMMENT 'Show on Dashboard',
+    dashboard_pos smallint NOT NULL DEFAULT '100' COMMENT 'Position on Dashboard',
     created_on timestamp default CURRENT_TIMESTAMP NOT NULL,
     FOREIGN KEY(external_device_id) REFERENCES iot_device(id),
     PRIMARY KEY(id),
     UNIQUE KEY(internal_device_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+ALTER TABLE iot_device_routing ADD COLUMN IF NOT EXISTS show_dashboard smallint NOT NULL DEFAULT '-1' COMMENT 'Show on Dashboard';
+ALTER TABLE iot_device_routing ADD COLUMN IF NOT EXISTS dashboard_pos smallint NOT NULL DEFAULT '100' COMMENT 'Position on Dashboard';
 
 CREATE TABLE IF NOT EXISTS iot_device_attribute(
     id int NOT NULL AUTO_INCREMENT COMMENT 'Unique key',
@@ -436,7 +440,14 @@ call api_proc_create_table_field_instance(10012,1500, 'last_scan_on','Letzter Sc
 call api_proc_create_table_field_instance(10012,1600, 'network_ssid','Netzwerk SSID','string',1,'{"disabled": true}', @out_value);
 call api_proc_create_table_field_instance(10012,1700, 'network_rssi','RSSI (Netzwerk)','int',14,'{"disabled": true}', @out_value);
 
-
+/* iot_device_routing */
+call api_proc_create_table_field_instance(10017,100, 'id','ID','int',14,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10017,200, 'internal_device_id','Interne ID','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10017,300, 'external_device_id','Externe ID','string',2,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10017,400, 'description','Bezeichnung im Dashboard','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10017,500, 'show_dashboard','Anzeige im Dashboard','int',19,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10017,600, 'dashboard_pos','Dashboard Pos','int',14,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10017,700, 'created_on','Erstellt am','datetime',9,'{"disabled": true}', @out_value);
 
 
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
@@ -596,7 +607,7 @@ INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type
     VALUES (10000010,'iot_action_device_switch','iot_action_device_switch','execute','before',100,0,10000);
 
 INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,run_async,solution_id)
-    VALUES (10000011,'iot_Plugin_add_portal_params','iot_demo','render_portal_content','before',100,0,10000);
+    VALUES (10000011,'iot_plugin_add_portal_params','iot_demo','render_portal_content','before',100,0,10000);
 
 
 
