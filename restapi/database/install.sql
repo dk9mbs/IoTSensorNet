@@ -10,13 +10,20 @@ CREATE TABLE IF NOT EXISTS iot_location(
     id int NOT NULL AUTO_INCREMENT,
     name varchar(50) NOT NULL,
     local_gateway_url nvarchar(500) NULL COMMENT 'URL for iot Gateway',
+    local_gateway_topic nvarchar(500) NULL COMMENT 'Topic for iot MQTT Gateway',
+    local_gateway_protocol varchar(10) NOT NULL DEFAULT 'mqtt' COMMENT 'Protocol for messages',
     PRIMARY KEY(id),
     UNIQUE KEY(name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 ALTER TABLE iot_location ADD COLUMN IF NOT EXISTS local_gateway_url nvarchar(500) NULL COMMENT 'URL for iot Gateway';
+ALTER TABLE iot_location ADD COLUMN IF NOT EXISTS local_gateway_topic nvarchar(500) NULL COMMENT 'Topic for iot MQTT Gateway';
+ALTER TABLE iot_location ADD COLUMN IF NOT EXISTS local_gateway_protocol varchar(10) NOT NULL DEFAULT 'mqtt' COMMENT 'Protocol for messages';
 
-INSERT IGNORE INTO iot_location (id,name) VALUES (1,'DEFAULT');
+INSERT IGNORE INTO iot_location (id,name,local_gateway_url, local_gateway_topic) 
+    VALUES (
+        1,'DEFAULT','http://localhost:5001/$session_id$/$device$/$command$/$value$','/restapi/iot/local_gw'
+        );
 
 
 /* Aktoren */
@@ -449,6 +456,13 @@ call api_proc_create_table_field_instance(10017,500, 'show_dashboard','Anzeige i
 call api_proc_create_table_field_instance(10017,600, 'dashboard_pos','Dashboard Pos','int',14,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10017,700, 'created_on','Erstellt am','datetime',9,'{"disabled": true}', @out_value);
 
+/* localtion */
+call api_proc_create_table_field_instance(10008,100, 'id','ID','int',14,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10008,100, 'name','Name','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10008,100, 'local_gateway_url','Gateway URL (HTTP)','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10008,100, 'local_gateway_topic','Gateway Topic (MQTT)','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10008,100, 'local_gateway_protocol','Gateway Protokoll','string',20,'{"disabled": false}', @out_value);
+UPDATE api_table_field SET control_config='{"listitems": "mqtt;MQTT|http;HTTP"}' WHERE id=@out_value;
 
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
@@ -874,6 +888,8 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
     <select>
         <field name="id" table_alias="l" alias="id" header="ID"/>
         <field name="name" table_alias="l" alias="test" header="Location"/>
+        <field name="local_gateway_protocol" table_alias="l" header="Protokoll"/>
+
     </select>
 </restapi>');
 

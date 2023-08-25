@@ -30,29 +30,48 @@ def execute(context, plugin_context, params):
         logger.warning(f"Missings params")
         return
 
+    use_http=False
+    use_mqtt=True
+
     now=datetime.datetime.now()
     config=plugin_context['config']
-    url=__get_location_url(context, params['input']['device'])
-    #url=__get_config_value(config, "endpoint", "http://localhost:5001/$sessionid$/$device$/$command$/$value$")
-    timeout=int(__get_config_value(config, "timeout", "15"))
+    protocol,url,topic=_get_location_url(context, params['input']['device'])
 
-    url=url.replace("$session_id$", params['input']['session_id'])
-    url=url.replace("$device$", params['input']['device'])
-    url=url.replace("$command$", params['input']['command'])
-    url=url.replace("$value$", params['input']['value'])
 
-    r = requests.get(url, json={}, timeout=timeout)
+    if protocol=="http":
+        timeout=int(_get_config_value(config, "timeout", "15"))
 
-    params['output']['status_code']=r.status_code
-    params['output']['payload']=r.text
+        url=url.replace("$session_id$", params['input']['session_id'])
+        url=url.replace("$device$", params['input']['device'])
+        url=url.replace("$command$", params['input']['command'])
+        url=url.replace("$value$", params['input']['value'])
+        r = requests.get(url, json={}, timeout=timeout)
 
-def __get_config_value(config, name, default):
+        params['output']['status_code']=r.status_code
+        params['output']['payload']=r.text
+    elif protocol=="mqtt":
+        from services.mqtt_client import MqttClient
+        session_id=params['input']['session_id']
+        internal_device_id=params['input']['device']
+        attribute=params['input']['command']
+        value=params['input']['value']
+
+        with MqttClient(context) as client:
+            payload={"session_id":session_id, "internal_device_id":internal_device_id,
+                "attribute":attribute,"value":value}
+            client.publish(topic, json.dumps(payload))
+
+        params['output']['status_code']=200
+        params['output']['payload']=""
+
+
+def _get_config_value(config, name, default):
     if name in config:
         return config[name]
 
     return default
 
-def __get_location_url(context, device_id):
+def _get_location_url(context, device_id):
     fetch_xml=f"""<restapi type="select">
     <table name="iot_device" alias="d"/>
     <filter type="or">
@@ -69,6 +88,8 @@ def __get_location_url(context, device_id):
         <field name="id" table_alias="d"/>
         <field name="location_id" table_alias="d"/>
         <field name="local_gateway_url" table_alias="l"/>
+        <field name="local_gateway_topic" table_alias="l"/>
+        <field name="local_gateway_protocol" table_alias="l"/>
     </select>
     </restapi>"""
     fetchparser=FetchXmlParser(fetch_xml, context)
@@ -79,7 +100,10 @@ def __get_location_url(context, device_id):
 
     loc=rs.get_result()
 
-    if loc['local_gateway_url'] == '' or loc['local_gateway_url'] == None:
+    if loc['local_gateway_protocol']=="http" and (loc['local_gateway_url'] == '' or loc['local_gateway_url'] == None):
         raise Exception(f"Location url for {device_id} is empty!")
 
-    return loc['local_gateway_url']
+    if loc['local_gateway_protocol']=="mqtt" and (loc['local_gateway_topic'] == '' or loc['local_gateway_topic'] == None):
+        raise Exception(f"Location topic for {device_id} is empty!")
+
+    return (loc['local_gateway_protocol'], loc['local_gateway_url'], loc['local_gateway_topic'])
