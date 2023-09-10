@@ -316,6 +316,16 @@ CREATE TABLE IF NOT EXISTS iot_manual_sensor_data (
     FOREIGN KEY(status_id) REFERENCES iot_manual_sensor_data_status(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+CREATE TABLE IF NOT EXISTS iot_sensor_change(
+    id int NOT NULL AUTO_INCREMENT,
+    change_subject varchar(250) NOT NULL,
+    sensor_id varchar(250) NULL,
+    change_date datetime NOT NULL,
+    change_text text NULL,
+    created_on timestamp default CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY(id),
+    FOREIGN KEY(sensor_id) REFERENCES iot_sensor(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 INSERT IGNORE INTO api_user (id,username,password,is_admin,disabled,solution_id) VALUES (10000,'IoTSrv','password',0,0,10000);
 INSERT IGNORE INTO api_user (id,username,password,is_admin,disabled,solution_id) VALUES (10001,'IoTAdmin','password',0,-1,10000);
@@ -407,6 +417,10 @@ INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,des
     VALUES
     (10019,'iot_device_attribute_value','iot_device_attribute_value','id','int','name',10000);
 
+INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
+    VALUES
+    (10020,'iot_sensor_change','iot_sensor_change','id','int','change_text',10000);
+
 INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10017, 'ID','id','int','{"disabled": true}');
 INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10017, 'Erstellt am','created_on','datetime','{"disabled": true}');
 INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10018, 'ID','id','int','{"disabled": true}');
@@ -463,6 +477,25 @@ call api_proc_create_table_field_instance(10008,100, 'local_gateway_url','Gatewa
 call api_proc_create_table_field_instance(10008,100, 'local_gateway_topic','Gateway Topic (MQTT)','string',1,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10008,100, 'local_gateway_protocol','Gateway Protokoll','string',20,'{"disabled": false}', @out_value);
 UPDATE api_table_field SET control_config='{"listitems": "mqtt;MQTT|http;HTTP"}' WHERE id=@out_value;
+
+/* iot_node */
+call api_proc_create_table_field_instance(10006,100, 'id','ID','int',14,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10006,200, 'name','Name','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10006,300, 'last_error_code','Letzter Fehlercode','int',14,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10006,400, 'ip_address','IP Adresse','string',1,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10006,500, 'last_heard_on','Zuletzt gehört','datetime',9,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10006,600, 'status_id','Status','int',2,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10006,700, 'location_id','Ort','int',2,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10006,800, 'display_template','Display (jinja)','string',18,'{"disabled": false}', @out_value);
+
+/* sensor change */
+call api_proc_create_table_field_instance(10020,100, 'id','ID','int',14,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10020,100, 'change_subject','Subject','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10020,100, 'sensor_id','Sensor','string',2,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10020,100, 'change_date','Datum','datetime',9,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10020,100, 'change_text','Text','string',18,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10020,100, 'created_on','Erstellt am','datetime',9,'{"disabled": true}', @out_value);
+
 
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
@@ -522,6 +555,12 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
     (10000,10018,0,-1,0,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
+    VALUES
+    (10000,10019,0,-1,0,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
+    VALUES
+    (10000,10020,0,-1,0,10000);
 
 
 
@@ -587,6 +626,9 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
     VALUES
     (10001,10019,-1,-1,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
+    VALUES
+    (10001,10020,-1,-1,-1,-1,10000);
 
 
 
@@ -665,6 +707,8 @@ INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) 
 INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
 10011,10000,'Device Routing','/ui/v1.0/data/view/iot_device_routing/default',1,10000);
 
+INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
+10012,10000,'Sensor Changes','/ui/v1.0/data/view/iot_sensor_change/default',1,10000);
 
 
 
@@ -1039,6 +1083,22 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
     </select>
 </restapi>');
 
+INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml) VALUES (
+10024,'LISTVIEW','default',10020,'id',10000,'<restapi type="select">
+    <table name="iot_sensor_change" alias="r"/>
+    <filter type="or">
+        <condition field="sensor_id" alias="r" value="$$query$$" operator="$$operator$$"/>
+    </filter>
+    <orderby>
+        <field name="change_date" alias="r" sort="ASC"/>
+    </orderby>
+    <select>
+        <field name="id" table_alias="r" alias="id" header="ID"/>
+        <field name="sensor_id" table_alias="r" header="Sensor"/>
+        <field name="change_subject" table_alias="r" header="Subject"/>
+        <field name="change_date" table_alias="r" header="Datum"/>
+    </select>
+</restapi>');
 
 
 
