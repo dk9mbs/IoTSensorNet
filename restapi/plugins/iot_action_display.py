@@ -25,14 +25,15 @@ def execute(context, plugin_context, params):
         logger.warning(f"Missings params")
         return
 
-    #JinjaEnvironment.register_template_function('iot_get_numeric_sensor_value', iot_common.get_numeric_sensor_value)
-    #JinjaEnvironment.register_template_function('iot_get_sensor_value', iot_common.get_sensor_value)
-
     node_name=params['input']['node_name']
     display_text=""
+    node_version=""
+
+    if 'node_version' in params['input']:
+        node_version=params['input']['node_version']
 
     rs=iot_common.get_node_by_node_name(context, node_name)
-    iot_common.set_node_last_heard(context, node_name)
+    iot_common.set_node_last_heard(context, node_name, node_version=node_version)
 
     if not rs.get_eof():
         display_text=rs.get_result()['display_template']
