@@ -9,13 +9,14 @@ from services.numerictools import isnumeric
 
 logger=log.create_logger(__name__)
 
-def set_node_last_heard(context, node_name):
+def set_node_last_heard(context, node_name, node_version="---"):
     now=datetime.datetime.now()
     fetch=f"""
     <restapi type="update">
         <table name="iot_node"/>
         <fields>
             <field name="last_heard_on" value="{now}"/>
+            <field name="version" value="{node_version}"/>
         </fields>
         <filter>
             <condition field="name" value="{node_name}" operator="="/>

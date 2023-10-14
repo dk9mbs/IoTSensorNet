@@ -175,6 +175,7 @@ CREATE TABLE IF NOT EXISTS iot_node (
     status_id int NOT NULL DEFAULT '0',
     location_id int NULL,
     display_template text NULL,
+    version varchar(50) NULL,
     PRIMARY KEY(id),
     FOREIGN KEY(status_id) REFERENCES iot_node_status(id),
     FOREIGN KEY(location_id) REFERENCES iot_location(id),
@@ -183,6 +184,7 @@ CREATE TABLE IF NOT EXISTS iot_node (
 
 ALTER TABLE iot_node ADD COLUMN IF NOT EXISTS location_id int NULL;
 ALTER TABLE iot_node ADD COLUMN IF NOT EXISTS display_template text NULL;
+ALTER TABLE iot_node ADD COLUMN IF NOT EXISTS version varchar(50) NULL AFTER display_template;
 ALTER TABLE iot_node ADD CONSTRAINT  FOREIGN KEY IF NOT EXISTS (location_id) REFERENCES iot_location (id);
 
 CREATE TABLE IF NOT EXISTS iot_sensor_data(
@@ -221,6 +223,8 @@ CREATE TABLE IF NOT EXISTS iot_sensor_type(
 INSERT IGNORE INTO iot_sensor_type (id, name) VALUES (1, 'DS 1820');
 INSERT IGNORE INTO iot_sensor_type (id, name) VALUES (2, 'DHT 11');
 INSERT IGNORE INTO iot_sensor_type (id, name) VALUES (3, 'DHT 22');
+INSERT IGNORE INTO iot_sensor_type (id, name) VALUES (4, 'BMP180');
+INSERT IGNORE INTO iot_sensor_type (id, name) VALUES (5, 'MLX 90614');
 
 CREATE TABLE IF NOT EXISTS iot_sensor (
     id varchar(250) NOT NULL COMMENT 'unique id',
@@ -487,6 +491,7 @@ call api_proc_create_table_field_instance(10006,500, 'last_heard_on','Zuletzt ge
 call api_proc_create_table_field_instance(10006,600, 'status_id','Status','int',2,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10006,700, 'location_id','Ort','int',2,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10006,800, 'display_template','Display (jinja)','string',18,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10006,900, 'version','Version','string',1,'{"disabled": true}', @out_value);
 
 /* sensor change */
 call api_proc_create_table_field_instance(10020,100, 'id','ID','int',14,'{"disabled": true}', @out_value);
@@ -664,6 +669,10 @@ INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type
 
 INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,run_async,solution_id)
     VALUES (10000011,'iot_plugin_add_portal_params','iot_demo','render_portal_content','before',100,0,10000);
+
+INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,solution_id)
+    VALUES (10000012,'iot_action_set_last_heard','iot_action_set_last_heard','execute','before',100,10000);
+
 
 
 
@@ -877,6 +886,7 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
         <field name="ip_address" table_alias="n" header="IP"/>
         <field name="last_heard_on" table_alias="n" header="Last heard"/>
         <field name="last_error_code" table_alias="n" header="Last Error"/>
+        <field name="version" table_alias="n" header="Version"/>
         <field name="name" table_alias="ns" header="Status"/>
         <field name="name" table_alias="l" alias="location_name" header="Location"/>
         <field name="status_id" table_alias="n" header="StatusID"/>
@@ -1100,6 +1110,23 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
     </select>
 </restapi>');
 
+INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml) VALUES (
+10025,'LISTVIEW','default',10000,'id',10000,'<restapi type="select">
+    <table name="iot_sensor_data" alias="s"/>
+    <filter type="or">
+        <condition field="sensor_namespace" table_alias="s" value="$$query$$" operator=" like "/>
+    </filter>
+    <orderby>
+        <field name="id" alias="s" sort="DESC"/>
+    </orderby>
+    <select>
+        <field name="id" table_alias="s" alias="id" header="ID"/>
+        <field name="sensor_id" table_alias="st" header="Type"/>
+        <field name="sensor_namespace" table_alias="s" header="Description"/>
+        <field name="sensor_value" table_alias="s" header="Value (current)"/>
+        <field name="created_on" table_alias="s" header="Unit"/>
+    </select>
+</restapi>');
 
 
 

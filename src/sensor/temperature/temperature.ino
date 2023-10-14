@@ -5,6 +5,7 @@
  * https://gist.github.com/bbx10/5a2885a700f30af75fc5
  * https://github.com/esp8266/Arduino/blob/4897e0006b5b0123a2fa31f67b14a3fff65ce561/libraries/ESP8266WiFi/src/include/wl_definitions.h
  * https://github.com/adafruit/Adafruit_MQTT_Library/blob/master/examples/mqtt_esp8266/mqtt_esp8266.ino
+ * https://github.com/adafruit/Adafruit-MLX90614-Library
  * 
  * https://github.com/lucasmaziero/LiquidCrystal_I2C
  * 
@@ -21,8 +22,10 @@
  * v1.6: BMP180 sensor implemented
  * v1.7: Rainfall Sensor implemented
  * v1.8: ESP-now protocol implemented 
+ * v1.9: MLX90614 implemented 
+ * v1.9.1: setLastHeard implemented
 */
-const String nodeVersion="v1.8";
+const String nodeVersion="v1.9.1";
 
 #ifdef ESP32
 #pragma message(THIS EXAMPLE IS FOR ESP8266 ONLY!)
@@ -71,6 +74,10 @@ const String nodeVersion="v1.8";
 #include <espnow.h>
 #endif
 
+#if ENABLE_MLX90614
+#include <Wire.h>
+#include <Adafruit_MLX90614.h>
+#endif
 
 #define ONEWIREBUSPIN 4
 #define SETUPPIN 5 
@@ -128,6 +135,11 @@ int rainfallSended=0;
 int lastrainfallSignal=0; 
 #endif
 
+#if ENABLE_MLX90614
+Adafruit_MLX90614 mlx = Adafruit_MLX90614();
+#endif
+
+
 const char* broadcastAddress="192.168.2.255";
 long lastMsg = 0;
 char msg[50];
@@ -136,6 +148,7 @@ int modeSleepTimeSec=60;
 boolean modeDeepSleep=false;
 boolean runSetup=false;
 long loopDelay=0;
+long loopDisplayDelay=0; // Interval for display pull
 String dspValue1;
 String dspValue2;
 
@@ -180,10 +193,12 @@ void setup() {
   //insecure=readConfigValue("insecure");
   insecure=stringToBool(readConfigValue("insecure").c_str());
 
-  Serial.println(restApiUrl);
-  Serial.println(restApiUser);
-  Serial.print("Displaymode:");
-  Serial.println(String(displayMode));
+  Serial.println("");Serial.println("=====================================");
+  Serial.print("Version:"); Serial.println(nodeVersion);
+  Serial.print("API endpoint:");Serial.println(restApiUrl);
+  Serial.print("API user:");Serial.println(restApiUser);
+  Serial.print("Displaymode:");Serial.println(String(displayMode));
+  Serial.println("=====================================");
 
   if(digitalRead(SETUPPIN)==0) runSetup=true;
   
@@ -272,8 +287,22 @@ void setup() {
     } else {
       Serial.println("No BMP180 sensor found!!!");     
     }
+    #endif
+
+    
+    #if ENABLE_MLX90614
+      Serial.println("searching MLX sensor ...");
+      if (!mlx.begin()) {
+          Serial.println("Error connecting to MLX sensor. Check wiring.");
+      } else {
+          Serial.println("MLX sensor available!!!");
+          delay(1000);
+          Serial.print("Emissivity = "); Serial.println(mlx.readEmissivity());
+          Serial.println("================================================");
+      }
 
     #endif
+
     // attach Reset pin isr
     attachInterrupt(digitalPinToInterrupt(SETUPPIN), buttonIsr, CHANGE);
 
@@ -286,8 +315,10 @@ void setup() {
 
     serverLog(errCount,httpCode, readConfigValue("hostname"), "Node started.");
     if(errCount>0) {
+      #if ENABLE_DISPLAY
       printLcd(lcd, 0,0, "Log error ("+String(httpCode)+")",1);
       printLcd(lcd, 0,1, "restart the node",0);
+      #endif
       reset(60000);
     }
     #if ENABLE_DISPLAY
@@ -315,8 +346,10 @@ void loop() {
       saveLastErrorCode(1);
       Serial.print("WiFi status: ");
       Serial.println(WiFi.status());
+      #if ENABLE_DISPLAY
       printLcd(lcd, 0,0, "WiFi failed!!!", 1);
       printLcd(lcd, 0,1, "Reboot in 30sec", 0);
+      #endif
       reset(30000);   
     }
 
@@ -338,8 +371,10 @@ void loop() {
     if(keyPressTime>0){
       Serial.print("Keypress detected:");
       Serial.println(keyPressTime);
+      #if ENABLE_DISPLAY
       if (keyPressTime<1000) handleSettings(displayMode, false);
       if (keyPressTime>=1000) handleSettings(displayMode, true);
+      #endif
     }
     // Setup Button End
 
@@ -367,7 +402,8 @@ void loop() {
       String addressTemp;
       String addressAltitude;
       String addressHum;
-
+      String addressAmbientC;
+      String addressObjectC;
   
       #if ENABLE_ONEWIRE
       readOneWireTempMultible(errCount);
@@ -478,15 +514,37 @@ void loop() {
         #if ENABLE_ESPNOW_PUB
         publishEspNowSensorPayload(errCount, addressPressure, p, "restapi");
         #endif
-                      
       #endif
 
 
+      #if ENABLE_MLX90614
+        float ambient;
+        float object;
+        readMlx90614(mlx,addressAmbientC, addressObjectC, ambient, object);
+
+        #if ENABLE_MQTT  
+        publishMqttSensorPayload(sensorTopic, addressObjectC, object, "restapi");
+        publishMqttSensorPayload(sensorTopic, addressAbbientC, ambient, "restapi");
+        #endif
+
+        #if ENABLE_HTTP
+        publishHttpSensorPayload(errCount, addressObjectC,object,"restapi");
+        publishHttpSensorPayload(errCount, addressAmbientC,ambient,"restapi");
+        #endif    
+
+        #if ENABLE_ESPNOW_PUB
+        publishEspNowSensorPayload(errCount, addressObjectC, object, "restapi");
+        publishEspNowSensorPayload(errCount, addressAmbientC, ambient, "restapi");
+        #endif
+
+      #endif
+      
       #if ENABLE_HTTP
-      if(displayMode==2) {
+      /* removed in v1.9 */
+      /*if(displayMode==2) {
         getDisplayData(errCount);
         //printPullData(getDisplayData(errCount));
-      }
+      }*/
       #endif
       
       // in case of http errors rebot the node
@@ -498,8 +556,10 @@ void loop() {
       
       if(transferFailedCount>5) {
         saveLastErrorCode(2);
+        #if ENABLE_DISPLAY
         printLcd(lcd, 0,0, "Transfer failed",1);
         printLcd(lcd, 0,1, "max. achieved",0);
+        #endif
         Serial.println("HTTP Errors! I will reboot and try it again.");
         Serial.print("HTTP errors:");
         Serial.println(transferFailedCount);
@@ -522,6 +582,29 @@ void loop() {
     //
     // End Statemachine
     //
+
+    // call every minute
+    bool setLastHeard;
+    setLastHeard=false;
+
+    if( (now-loopDisplayDelay>=(60*1000) || loopDisplayDelay==0) ) {
+      #if ENABLE_HTTP
+      if(displayMode==2) {
+        #if ENABLE_DISPLAY
+        setLastHeard=true;
+        getDisplayData(errCount);
+        Serial.println("display data pulled!");
+        #endif
+      }
+      #endif
+
+      if(setLastHeard==false) {
+        setServerLastHeard(errCount);
+        Serial.println("set server last heard");
+      }
+
+      loopDisplayDelay=now;
+    }
     
     if(modeDeepSleep) {
       Serial.println("good night...");
@@ -531,7 +614,7 @@ void loop() {
     }
 } // function
 
-
+#if ENABLE_DISPLAY
 void handleSettings(int & mode, boolean set) {
   static int menuStatus=0; //0=Show DHT11 1=Remote Push 2=Reboot 3=ELAN Status 4=Exit 
 
@@ -602,6 +685,7 @@ void handleSettings(int & mode, boolean set) {
       printLcd(lcd, 0,0, "SHOW IP",1);
   }
 }
+#endif
 
 void handleKey(int key, long & lastToggleActionMs, int & status, long & lastPressedMs, int & keyPressTime) {
   /*
@@ -795,6 +879,22 @@ void readOneWireTempMultible(int & errCount) {
 }
 #endif
 
+#if ENABLE_MLX90614
+  void readMlx90614(Adafruit_MLX90614& mlx,String& addressAmbientC,String& addressObjectC, float& ambient, float& object) {
+    Serial.println("******* MLX90414 ***********");
+    ambient=mlx.readAmbientTempC();
+    object=mlx.readObjectTempC();
+    addressAmbientC=createIoTDeviceAddress("mlx90614.ambient.c");
+    addressObjectC=createIoTDeviceAddress("mlx90614.object.c");
+    
+    Serial.print("Emissivity = "); Serial.println(mlx.readEmissivity());
+    Serial.print("Temperature ambient:"); Serial.print(ambient); Serial.println("°C");
+    Serial.print("Temperature object:"); Serial.print(object); Serial.println("°C");
+    Serial.println("******* end MLX90414 ***********");
+  }
+
+#endif
+
 #if ENABLE_BMP
 void readBmp180(Adafruit_BMP085_Unified& bmp, String& addressPressure,String& addressTemp,String& addressAltitude, 
   float& pressure, float& temperature, float& altitude) {
@@ -922,7 +1022,11 @@ void setupHttpAdmin() {
   httpServer.on("/",handleHttpSetup);
   httpServer.on("/api",handleHttpApi);
   httpServer.on("/version",handleHttpVersion);
+
+  #if ENABLE_DISPLAY
   httpServer.on("/setdisplay",handleHttpSetDisplay);
+  #endif
+  
   httpServer.onNotFound(handleHttp404);
   httpServer.begin();
 }
@@ -935,6 +1039,7 @@ void handleHttpVersion() {
   httpServer.send(200, "text/html", "{\"version\": \""+nodeVersion+"\"}"); 
 }
 
+#if ENABLE_DISPLAY
 void handleHttpSetDisplay() {
   if(httpServer.hasArg("line1")) {
       printLcd(lcd, 0,0, httpServer.arg("line1"),1);
@@ -950,6 +1055,7 @@ void handleHttpSetDisplay() {
 
   httpServer.send(200, "text/html", "{\"result\": \"OK\"}"); 
 }
+#endif
 
 void handleHttpSetup() {
     String pwd = readConfigValue("adminpwd");
@@ -1311,13 +1417,39 @@ void publishHttpSensorPayload(int & errCount, String address, float value, Strin
 
 }
 
+void setServerLastHeard(int& errCount) {
+    // ToDo: Create a new action that only set the lasthard on the server!
+    http.begin(espClient, restApiUrl+"action/iot_action_set_last_heard");
+    http.addHeader("restapi-username", restApiUser);
+    http.addHeader("restapi-password", restApiPwd);
+    http.addHeader("Content-Type", "application/json");
+
+    int httpCode=http.POST("{\"node_name\":\""+nodeName+"\",\"node_version\":\""+nodeVersion+"\"}");
+    if(httpCode==200) {
+      Serial.println("Last heard on server is set!");
+    } else {
+      errCount++; 
+      #if ENABLE_DISPLAY
+      printLcd(lcd, 0,0, String(httpCode),1);
+      #endif
+    }
+
+    Serial.print("HTTP Code (setServerLastHeard):");
+    Serial.println(httpCode);
+
+    http.end();
+  
+}
+
+#if ENABLE_DISPLAY
 void getDisplayData(int & errCount) {
     http.begin(espClient, restApiUrl+"action/iot_get_node_display_text");
     http.addHeader("restapi-username", restApiUser);
     http.addHeader("restapi-password", restApiPwd);
     http.addHeader("Content-Type", "application/json");
 
-    int httpCode=http.POST("{\"node_name\":\""+nodeName+"\"}");
+    //int httpCode=http.POST("{\"node_name\":\""+nodeName+"\"}");
+    int httpCode=http.POST("{\"node_name\":\""+nodeName+"\",\"node_version\":\""+nodeVersion+"\"}");
     if(httpCode==200) {
       //String line1=split(http.getString(), ';', 0);
       //String line2=split(http.getString(), ';', 1);
@@ -1330,16 +1462,19 @@ void getDisplayData(int & errCount) {
       
     } else {
       errCount++; 
+      #if ENABLE_DISPLAY
       printLcd(lcd, 0,0, String(httpCode),1);
+      #endif
     }
 
-    Serial.print("HTTP Code (get display):");
+    Serial.print("HTTP Code (getDisplayData):");
     Serial.println(httpCode);
 
     http.end();
 
     Serial.println("after http.end()");
 }
+#endif
 
 /*
 void printPullData(String command) {
