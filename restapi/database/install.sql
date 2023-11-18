@@ -176,6 +176,20 @@ CREATE TABLE IF NOT EXISTS iot_node (
     location_id int NULL,
     display_template text NULL,
     version varchar(50) NULL,
+    define_onewire smallint NOT NULL default '-1',
+    define_dht smallint NOT NULL default '0',
+    define_dht_type varchar(10) NOT NULL default 'DHT11',
+    define_lightness smallint NOT NULL default '0',
+    define_rainfall smallint NOT NULL default '0',
+    define_display smallint NOT NULL default '-1',
+    define_mqtt smallint NOT NULL default '0',
+    define_http smallint NOT NULL default '-1',
+    define_https smallint NOT NULL default '-1',
+    define_ota smallint NOT NULL default '-1',
+    define_bmp smallint NOT NULL default '0',
+    define_espnow_sub smallint NOT NULL default '0',
+    define_espnow_pub smallint NOT NULL default '0',
+    define_mlx90614 smallint NOT NULL default '0',
     PRIMARY KEY(id),
     FOREIGN KEY(status_id) REFERENCES iot_node_status(id),
     FOREIGN KEY(location_id) REFERENCES iot_location(id),
@@ -185,6 +199,20 @@ CREATE TABLE IF NOT EXISTS iot_node (
 ALTER TABLE iot_node ADD COLUMN IF NOT EXISTS location_id int NULL;
 ALTER TABLE iot_node ADD COLUMN IF NOT EXISTS display_template text NULL;
 ALTER TABLE iot_node ADD COLUMN IF NOT EXISTS version varchar(50) NULL AFTER display_template;
+ALTER TABLE iot_node ADD COLUMN IF NOT EXISTS define_onewire smallint NOT NULL default '-1';
+ALTER TABLE iot_node ADD COLUMN IF NOT EXISTS define_dht smallint NOT NULL default '0';
+ALTER TABLE iot_node ADD COLUMN IF NOT EXISTS define_dht_type varchar(10) NOT NULL default 'DHT11';
+ALTER TABLE iot_node ADD COLUMN IF NOT EXISTS define_lightness smallint NOT NULL default '0';
+ALTER TABLE iot_node ADD COLUMN IF NOT EXISTS define_rainfall smallint NOT NULL default '0';
+ALTER TABLE iot_node ADD COLUMN IF NOT EXISTS define_display smallint NOT NULL default '-1';
+ALTER TABLE iot_node ADD COLUMN IF NOT EXISTS define_mqtt smallint NOT NULL default '0';
+ALTER TABLE iot_node ADD COLUMN IF NOT EXISTS define_http smallint NOT NULL default '-1';
+ALTER TABLE iot_node ADD COLUMN IF NOT EXISTS define_https smallint NOT NULL default '-1';
+ALTER TABLE iot_node ADD COLUMN IF NOT EXISTS define_ota smallint NOT NULL default '-1';
+ALTER TABLE iot_node ADD COLUMN IF NOT EXISTS define_bmp smallint NOT NULL default '0';
+ALTER TABLE iot_node ADD COLUMN IF NOT EXISTS define_espnow_sub smallint NOT NULL default '0';
+ALTER TABLE iot_node ADD COLUMN IF NOT EXISTS define_espnow_pub smallint NOT NULL default '0';
+ALTER TABLE iot_node ADD COLUMN IF NOT EXISTS define_mlx90614 smallint NOT NULL default '0';
 ALTER TABLE iot_node ADD CONSTRAINT  FOREIGN KEY IF NOT EXISTS (location_id) REFERENCES iot_location (id);
 
 CREATE TABLE IF NOT EXISTS iot_sensor_data(
@@ -492,6 +520,20 @@ call api_proc_create_table_field_instance(10006,600, 'status_id','Status','int',
 call api_proc_create_table_field_instance(10006,700, 'location_id','Ort','int',2,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10006,800, 'display_template','Display (jinja)','string',18,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10006,900, 'version','Version','string',1,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10006,1000, 'define_onewire','#define onewire','int',19,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10006,1100, 'define_dht','#define dht','int',19,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10006,1200, 'define_dht_type','#define dht_type','string',20,'{"listitems": "DHT11;DHT11|DHT22;DHT22", "disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10006,1300, 'define_lightness','#define lightness','int',19,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10006,1400, 'define_rainfall','#define rainfall','int',19,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10006,1500, 'define_display','#define display','int',19,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10006,1600, 'define_mqtt','#define mqtt','int',19,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10006,1700, 'define_http','#define http','int',19,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10006,1800, 'define_https','#define https','int',19,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10006,1900, 'define_ota','#define ota','int',19,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10006,2000, 'define_bmp','#define bmp','int',19,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10006,2100, 'define_espnow_sub','#define espnow_sub','int',19,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10006,2200, 'define_espnow_pub','#define espnow_pub','int',19,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10006,2300, 'define_mlx90614','#define mlx90614','int',19,'{"disabled": false}', @out_value);
 
 /* sensor change */
 call api_proc_create_table_field_instance(10020,100, 'id','ID','int',14,'{"disabled": true}', @out_value);

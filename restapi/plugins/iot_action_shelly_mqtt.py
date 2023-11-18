@@ -34,7 +34,7 @@ def execute(context, plugin_context, params):
         return
 
     now=datetime.datetime.now()
-    config=plugin_context['config']
+    #config=plugin_context['config']
 
     device_id=params['input']['device']
     command=params['input']['command']

@@ -29,11 +29,13 @@ def execute(context, plugin_context, params):
     display_text=""
     node_version=""
 
-    if 'node_version' in params['input']:
-        node_version=params['input']['node_version']
 
     rs=iot_common.get_node_by_node_name(context, node_name)
-    iot_common.set_node_last_heard(context, node_name, node_version=node_version)
+    iot_common.set_node_last_heard(context, node_name)
+
+    if 'node_version' in params['input']:
+        iot_common.set_node_version(context, params['input']['node_version'])
+
 
     if not rs.get_eof():
         display_text=rs.get_result()['display_template']

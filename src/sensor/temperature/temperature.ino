@@ -1,5 +1,6 @@
 
 /*
+ * Board Verwalter url: http://arduino.esp8266.com/stable/package_esp8266com_index.json
  * https://unsinnsbasis.de/bmp180-bmp280-luftdrucksensoren/
  * https://arduino-esp8266.readthedocs.io/en/latest/esp8266wifi/station-class.html
  * https://gist.github.com/bbx10/5a2885a700f30af75fc5
@@ -87,7 +88,7 @@ const String nodeVersion="v1.9.1";
 #define DISPLAY_SCL 0 
 #define DISPLAY_SDA 2 
 
-#define DHT_TYPE DHT11
+
 #define MQTT_PUB_TOPIC "temp/sensor"
 #define PRE_TASK_MSSEC 5000
 #define POST_TASK_MSSEC 500
@@ -521,21 +522,26 @@ void loop() {
         float ambient;
         float object;
         readMlx90614(mlx,addressAmbientC, addressObjectC, ambient, object);
+        
+        //only a NaN will fail this test
+        if(object==object) {
 
-        #if ENABLE_MQTT  
-        publishMqttSensorPayload(sensorTopic, addressObjectC, object, "restapi");
-        publishMqttSensorPayload(sensorTopic, addressAbbientC, ambient, "restapi");
-        #endif
+          #if ENABLE_MQTT  
+          publishMqttSensorPayload(sensorTopic, addressObjectC, object, "restapi");
+          publishMqttSensorPayload(sensorTopic, addressAbbientC, ambient, "restapi");
+          #endif
+  
+          #if ENABLE_HTTP
+          publishHttpSensorPayload(errCount, addressObjectC,object,"restapi");
+          publishHttpSensorPayload(errCount, addressAmbientC,ambient,"restapi");
+          #endif    
+  
+          #if ENABLE_ESPNOW_PUB
+          publishEspNowSensorPayload(errCount, addressObjectC, object, "restapi");
+          publishEspNowSensorPayload(errCount, addressAmbientC, ambient, "restapi");
+          #endif
 
-        #if ENABLE_HTTP
-        publishHttpSensorPayload(errCount, addressObjectC,object,"restapi");
-        publishHttpSensorPayload(errCount, addressAmbientC,ambient,"restapi");
-        #endif    
-
-        #if ENABLE_ESPNOW_PUB
-        publishEspNowSensorPayload(errCount, addressObjectC, object, "restapi");
-        publishEspNowSensorPayload(errCount, addressAmbientC, ambient, "restapi");
-        #endif
+        }
 
       #endif
       
@@ -598,6 +604,8 @@ void loop() {
       }
       #endif
 
+      // for the performance: set the lasthaerd with the getdisplay request. 
+      // So we do not need two requests!
       if(setLastHeard==false) {
         setServerLastHeard(errCount);
         Serial.println("set server last heard");
@@ -1265,10 +1273,18 @@ void setupWifiSTA(const char* ssid, const char* password, const char* newMacStr,
   WiFi.begin(ssid, password);
   
   Serial.println("after WiFi.begin():");
+
+  int retries=60; //60*1000ms=60sec
   
   while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
+    delay(1000);
+    //Serial.print(".");
+    Serial.println(retries);
+    retries--;
+
+    if(retries==0) {
+      reset(1);
+    }
   }
 
   WiFi.macAddress(mac);
