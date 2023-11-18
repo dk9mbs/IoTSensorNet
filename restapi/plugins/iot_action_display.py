@@ -34,7 +34,7 @@ def execute(context, plugin_context, params):
     iot_common.set_node_last_heard(context, node_name)
 
     if 'node_version' in params['input']:
-        iot_common.set_node_version(context, params['input']['node_version'])
+        iot_common.set_node_version(context, node_name, params['input']['node_version'])
 
 
     if not rs.get_eof():
