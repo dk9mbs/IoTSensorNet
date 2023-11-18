@@ -10,9 +10,6 @@ from services.numerictools import isnumeric
 logger=log.create_logger(__name__)
 
 def set_node_last_heard(context, node_name):
-    if node_version=="":
-        node_version="???"
-
     now=datetime.datetime.now()
     fetch=f"""
     <restapi type="update">
