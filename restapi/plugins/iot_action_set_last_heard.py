@@ -32,6 +32,6 @@ def execute(context, plugin_context, params):
 
     rs=iot_common.get_node_by_node_name(context, node_name)
     iot_common.set_node_last_heard(context, node_name)
-    iot_common.set_node_version(context, node_version)
+    iot_common.set_node_version(context, node_name, node_version)
     
     params['output']=""

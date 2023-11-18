@@ -25,7 +25,7 @@ def set_node_last_heard(context, node_name):
     fetchparser=FetchXmlParser(fetch, context)
     DatabaseServices.exec(fetchparser, context, run_as_system=True)
 
-def set_node_version(context, node_version):
+def set_node_version(context, node_name, node_version):
     if node_version=="":
         node_version="???"
 
