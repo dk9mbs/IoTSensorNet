@@ -43,7 +43,7 @@ class IotDevice(Resource):
 
             params={'input': {}}
             params['output']={}
-            plugin_context={}
+            plugin_context={"config": {}}
             params['input']['session_id']=context.get_session_id()
             params['input']['command']=command
             params['input']['value']=value
