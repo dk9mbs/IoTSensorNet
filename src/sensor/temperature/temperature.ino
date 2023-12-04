@@ -5,7 +5,6 @@
  * https://arduino-esp8266.readthedocs.io/en/latest/esp8266wifi/station-class.html
  * https://gist.github.com/bbx10/5a2885a700f30af75fc5
  * https://github.com/esp8266/Arduino/blob/4897e0006b5b0123a2fa31f67b14a3fff65ce561/libraries/ESP8266WiFi/src/include/wl_definitions.h
- * https://github.com/adafruit/Adafruit_MQTT_Library/blob/master/examples/mqtt_esp8266/mqtt_esp8266.ino
  * https://github.com/adafruit/Adafruit-MLX90614-Library
  * 
  * https://github.com/lucasmaziero/LiquidCrystal_I2C
@@ -13,6 +12,9 @@
  * https://github.com/jandrassy/ArduinoOTA (search for ArduinoOTA in ide library manager)
  * https://arduinojson.org/?utm_source=meta&utm_medium=library.properties
  * https://github.com/adafruit/Adafruit_BMP085_Unified
+ * 
+ * https://pubsubclient.knolleary.net/ (PubSubClient for MQTT)
+ * 
  * ToDo:
  * Mac Address in setupFileSystem: : replace : with -
  * 
@@ -25,8 +27,9 @@
  * v1.8: ESP-now protocol implemented 
  * v1.9: MLX90614 implemented 
  * v1.9.1: setLastHeard implemented
+ * v1.9.2: PubSubClient implemented (Adafruit lib replaced)
 */
-const String nodeVersion="v1.9.1";
+const String nodeVersion="v1.9.2";
 
 #ifdef ESP32
 #pragma message(THIS EXAMPLE IS FOR ESP8266 ONLY!)
@@ -34,6 +37,23 @@ const String nodeVersion="v1.9.1";
 #endif
 
 #include "config.h"
+
+#if ENABLE_HTTPS & !ENABLE_HTTP
+#error "you must activate http"
+#endif
+
+#if ENABLE_SIMPLEPORTSWITCH & ENABLE_RAINFALL
+#error "Do not use ENABLE_RAINFALL and ENABLE_SIMPLEPORTSWITCH together!"
+#endif
+
+#if (ENABLE_SIMPLEPORTSWITCH | ENABLE_EXPANDERPORTSWITCH) & !ENABLE_MQTT
+#error "You must enable mqtt in config"
+#endif
+
+#if (ENABLE_HTTP | ENABLE_HTTPS) & ENABLE_MQTT
+#error "You can activate only one protocol mqtt or http"
+#endif
+
 #include "dk9mbs_tools.h"
 #include <ESP8266WiFi.h>
 
@@ -54,8 +74,10 @@ const String nodeVersion="v1.9.1";
 #endif
 
 #if ENABLE_MQTT
-#include "Adafruit_MQTT.h"
-#include "Adafruit_MQTT_Client.h"
+//#include "Adafruit_MQTT.h"
+//#include "Adafruit_MQTT_Client.h"
+
+#include <PubSubClient.h>
 #endif
 
 #if ENABLE_OTA
@@ -87,6 +109,7 @@ const String nodeVersion="v1.9.1";
 #define RAINFALL_PIN 13
 #define DISPLAY_SCL 0 
 #define DISPLAY_SDA 2 
+#define SIMPLEPORTSWITCH1_PIN 13
 
 
 #define MQTT_PUB_TOPIC "temp/sensor"
@@ -107,7 +130,7 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 #if ENABLE_HTTPS
 WiFiClientSecure espClient;
 #else
-  WiFiClient espClient;
+WiFiClient espClient;
 #endif
 
 
@@ -119,9 +142,8 @@ ESP8266WebServer httpServer(80);
 HTTPClient http;
 
 #if ENABLE_MQTT
-Adafruit_MQTT_Client mqtt(&espClient, "", 1883, "", "");
-Adafruit_MQTT_Publish sensorTopic = Adafruit_MQTT_Publish(&mqtt, MQTT_PUB_TOPIC, MQTT_QOS_0);
-//Adafruit_MQTT_Subscribe displayChanel = Adafruit_MQTT_Subscribe(&mqtt, "node/test", MQTT_QOS_0);
+String sensorTopic=MQTT_PUB_TOPIC;
+PubSubClient mqtt(espClient);
 #endif
 
 #if ENABLE_DHT
@@ -159,6 +181,7 @@ String restApiPwd;
 String nodeName;
 String restApiSHAFingerPrint;
 boolean insecure=true;
+String lastHeard;
 
 int state=0; // Status from Statemachine
 int transferFailedCount; // count the number of transfer faileds (http)
@@ -168,6 +191,46 @@ int displayMode=0; //0=DHT11 1=Remote (Push)
 long lastKey1ActionMs=0;
 long lastKey1PressedMs=0;
 int key1Status=0; //statemachine 
+
+#if ENABLE_MQTT
+String mqttPongTopic="restapi/solution/iot/sys/node/pong";
+String mqttSwitchTopic="restapi/solution/iot/node/switch";
+String mqttPingTopic="restapi/sys/ping";
+
+void switchCallback(char* topic, byte* payload, unsigned int length) {
+  char buffer[500];
+  Serial.print(topic);
+  Serial.print(" ");
+
+  for (int i=0;i<500;i++) {
+    buffer[i]='\0';  
+  }
+  
+  for (int i = 0; i < length; i++) {
+    buffer[i]=(char)payload[i];
+  }
+  
+  Serial.println(buffer);
+  
+  if ( strcmp(topic, mqttPingTopic.c_str())==0 ) {
+    mqtt.publish(mqttPongTopic.c_str(),lastHeard.c_str());
+  }
+
+  if ( strcmp(topic, mqttSwitchTopic.c_str())==0 ) {
+    DynamicJsonDocument doc(1024);
+    deserializeJson(doc, buffer);
+    const char* deviceId = doc["internal_device_id"];
+    const char* status = doc["status"];
+
+    if (strcmp(doc["node_name"], nodeName.c_str())==0) {
+      Serial.print(deviceId);
+      Serial.print(": ");
+      Serial.println(status);
+    }
+  }
+
+}
+#endif
 
 void setup() { 
   Serial.begin(115200);
@@ -193,7 +256,8 @@ void setup() {
   restApiSHAFingerPrint=readConfigValue("hostsha1fingerprint");
   //insecure=readConfigValue("insecure");
   insecure=stringToBool(readConfigValue("insecure").c_str());
-
+  lastHeard="{\"node_name\":\""+nodeName+"\",\"node_version\":\""+nodeVersion+"\"}";
+  
   Serial.println("");Serial.println("=====================================");
   Serial.print("Version:"); Serial.println(nodeVersion);
   Serial.print("API endpoint:");Serial.println(restApiUrl);
@@ -282,6 +346,11 @@ void setup() {
     attachInterrupt(digitalPinToInterrupt(RAINFALL_PIN), rainfallIsr, RISING);
     #endif
 
+    #if ENABLE_SIMPLEPORTSWITCH
+    pinMode(SIMPLEPORTSWITCH1_PIN, OUTPUT);
+    digitalWrite(SIMPLEPORTSWITCH1_PIN, LOW);
+    #endif
+
     #if ENABLE_BMP
     if (bmp.begin() ){
       Serial.println("BMP180 found ans started!");
@@ -314,6 +383,7 @@ void setup() {
     errCount=0;
     httpCode=0;
 
+    #if ENABLE_HTTP | ENABLE_HTTPS
     serverLog(errCount,httpCode, readConfigValue("hostname"), "Node started.");
     if(errCount>0) {
       #if ENABLE_DISPLAY
@@ -322,6 +392,8 @@ void setup() {
       #endif
       reset(60000);
     }
+    #endif
+    
     #if ENABLE_DISPLAY
     printLcd(lcd, 0,0, "Dsp.Mode:"+String(displayMode),1);
     printLcd(lcd, 0,1, "Version "+nodeVersion,0);
@@ -359,10 +431,10 @@ void loop() {
     
     #if ENABLE_MQTT
     mqttConnect();
+    mqtt.loop();
     #endif
-    
-    //mqtt.processPackets(10000);
 
+   
     // Statemachine
     long now = millis();
 
@@ -427,7 +499,7 @@ void loop() {
       if (!isnan(valueHum)) {
         dspValue1="H:"+String(int(valueHum))+"%";
 
-        #if ENABLE_MQTT  
+        #if ENABLE_MQTT
         publishMqttSensorPayload(sensorTopic, addressHum, valueHum, "restapi");
         #endif
 
@@ -602,7 +674,6 @@ void loop() {
         Serial.println("display data pulled!");
         #endif
       }
-      #endif
 
       // for the performance: set the lasthaerd with the getdisplay request. 
       // So we do not need two requests!
@@ -610,6 +681,10 @@ void loop() {
         setServerLastHeard(errCount);
         Serial.println("set server last heard");
       }
+      
+      #endif
+
+
 
       loopDisplayDelay=now;
     }
@@ -795,10 +870,12 @@ void readRainfall(int rainfallCount, int rainfallSended, String& address, float&
 #endif
 
 #if ENABLE_MQTT
-void publishMqttSensorPayload(Adafruit_MQTT_Publish& topic, String address, float value, const char* sensorNamespace) {
+//void publishMqttSensorPayload(Adafruit_MQTT_Publish& topic, String address, float value, const char* sensorNamespace) {
+void publishMqttSensorPayload(String topic, String address, float value, const char* sensorNamespace) {
   String payload="";
   payload = "{\"value\":"+String(value)+", \"address\":\""+address+"\", \"namespace\":"+sensorNamespace+"\"}";
-  topic.publish(payload.c_str());
+  //topic.publish(payload.c_str());
+  mqtt.publish(topic.c_str(), payload.c_str());
 }
 #endif
 
@@ -974,9 +1051,10 @@ void readBmp180(Adafruit_BMP085_Unified& bmp, String& addressPressure,String& ad
 
 #if ENABLE_MQTT
 void mqttConnect() {
-  int8_t ret;
+  //int8_t ret;
 
   if (mqtt.connected()) {
+    //mqtt.publish('dummy','0');
     return;
   }
 
@@ -1004,14 +1082,28 @@ void mqttConnect() {
   Serial.println(mqttPort);
   Serial.print("MQTT ClientID:");
   Serial.println(clientId);
+  Serial.print("MQTT User:");
+  Serial.println(user);
+  Serial.print("MQTT Password:");
+  Serial.println("**************");
 
-  mqtt=Adafruit_MQTT_Client(&espClient, mqttBroker.c_str(), mqttPort,clientId.c_str(), user.c_str(), pwd.c_str());
+  //mqtt=Adafruit_MQTT_Client(&espClient, mqttBroker.c_str(), mqttPort,clientId.c_str(), user.c_str(), pwd.c_str());
+
+  #if ENABLE_SIMPLEPORTSWITCH | ENABLE_EXPANDERPORTSWITCH
+  mqtt.setServer(mqttBroker.c_str(), 1883);
+  mqtt.setCallback(switchCallback);
+  mqtt. setKeepAlive(120);
+  //mqttSwitchTopic.setCallback(switchCallback);
+  //mqtt.subscribe(&mqttSwitchTopic);
+  #endif
 
   Serial.print("Connecting to MQTT... ");
 
   uint8_t retries = 3;
-  while ((ret = mqtt.connect()) != 0) { // connect will return 0 for connected
-       Serial.println(mqtt.connectErrorString(ret));
+  while ( !mqtt.connect(clientId.c_str(),user.c_str(),pwd.c_str()) ) { 
+       Serial.print("MQTT State: ");
+       Serial.println(mqtt.state());
+       //Serial.println(mqtt.connectErrorString(ret));
        Serial.println("Retrying MQTT connection in 5 seconds...");
        mqtt.disconnect();
        delay(5000);  // wait 5 seconds
@@ -1021,7 +1113,12 @@ void mqttConnect() {
          while (1);
        }
   }
-  Serial.println("MQTT Connected!");
+  mqtt.subscribe(mqttPingTopic.c_str());
+  mqtt.subscribe(mqttSwitchTopic.c_str());
+  
+  Serial.print("MQTT Connected with state:");
+  Serial.println(mqtt.state());
+  
 
 }
 #endif
@@ -1440,7 +1537,8 @@ void setServerLastHeard(int& errCount) {
     http.addHeader("restapi-password", restApiPwd);
     http.addHeader("Content-Type", "application/json");
 
-    int httpCode=http.POST("{\"node_name\":\""+nodeName+"\",\"node_version\":\""+nodeVersion+"\"}");
+    //int httpCode=http.POST("{\"node_name\":\""+nodeName+"\",\"node_version\":\""+nodeVersion+"\"}");
+    int httpCode=http.POST(lastHeard.c_str());
     if(httpCode==200) {
       Serial.println("Last heard on server is set!");
     } else {
