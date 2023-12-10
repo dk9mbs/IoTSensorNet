@@ -5,6 +5,7 @@ import json
 from core.fetchxmlparser import FetchXmlParser
 from services.database import DatabaseServices
 from core import log, jsontools
+from plugins.iot_common import IotLocation
 
 logger=log.create_logger(__name__)
 
@@ -32,11 +33,18 @@ def execute(context, plugin_context, params):
 
     use_http=False
     use_mqtt=True
+    port=0
 
     now=datetime.datetime.now()
     config=plugin_context['config']
-    protocol,url,topic=_get_location_url(context, params['input']['device'])
+    #protocol,url,topic=_get_location_url(context, params['input']['device'])
+    location=IotLocation(context, params['input']['device'])
+    protocol=location.get_location_gateway_protocol()
+    url=location.get_location_gateway_url()
+    topic=location.get_location_gateway_topic()
 
+    if 'port' in params['input']:
+        port=params['input']['port']
 
     if protocol=="http":
         timeout=int(_get_config_value(config, "timeout", "15"))
@@ -45,6 +53,7 @@ def execute(context, plugin_context, params):
         url=url.replace("$device$", params['input']['device'])
         url=url.replace("$command$", params['input']['command'])
         url=url.replace("$value$", params['input']['value'])
+        url=url.replace("$port$", params['input']['port'])
         r = requests.get(url, json={}, timeout=timeout)
 
         params['output']['status_code']=r.status_code
@@ -58,7 +67,7 @@ def execute(context, plugin_context, params):
 
         with MqttClient(context) as client:
             payload={"session_id":session_id, "internal_device_id":internal_device_id,
-                "attribute":attribute,"value":value}
+                "attribute":attribute,"value":value, "port": port}
             client.publish(topic, json.dumps(payload))
 
         params['output']['status_code']=200
@@ -70,40 +79,3 @@ def _get_config_value(config, name, default):
         return config[name]
 
     return default
-
-def _get_location_url(context, device_id):
-    fetch_xml=f"""<restapi type="select">
-    <table name="iot_device" alias="d"/>
-    <filter type="or">
-        <condition field="internal_device_id" alias="r" value="{device_id}" operator="="/>
-    </filter>
-    <joins>
-        <join type="inner" table="iot_device_routing" alias="r" condition="r.external_device_id=d.id"/>
-        <join type="inner" table="iot_location" alias="l" condition="d.location_id=l.id"/>
-    </joins>
-    <orderby>
-        <field name="created_on" alias="d" sort="DESC"/>
-    </orderby>
-    <select>
-        <field name="id" table_alias="d"/>
-        <field name="location_id" table_alias="d"/>
-        <field name="local_gateway_url" table_alias="l"/>
-        <field name="local_gateway_topic" table_alias="l"/>
-        <field name="local_gateway_protocol" table_alias="l"/>
-    </select>
-    </restapi>"""
-    fetchparser=FetchXmlParser(fetch_xml, context)
-    rs=DatabaseServices.exec(fetchparser, context, fetch_mode=1, run_as_system=False)
-
-    if rs.get_eof():
-        raise Exception(f"Location for {device_id} not found!")
-
-    loc=rs.get_result()
-
-    if loc['local_gateway_protocol']=="http" and (loc['local_gateway_url'] == '' or loc['local_gateway_url'] == None):
-        raise Exception(f"Location url for {device_id} is empty!")
-
-    if loc['local_gateway_protocol']=="mqtt" and (loc['local_gateway_topic'] == '' or loc['local_gateway_topic'] == None):
-        raise Exception(f"Location topic for {device_id} is empty!")
-
-    return (loc['local_gateway_protocol'], loc['local_gateway_url'], loc['local_gateway_topic'])

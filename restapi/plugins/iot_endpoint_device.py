@@ -36,7 +36,7 @@ class IotDevice(Resource):
     api=AppInfo.get_api()
 
     @api.doc(parser=create_parser_get())
-    def post(self,internal_device_id,value,command):
+    def post(self,internal_device_id,value,command, port=0):
         try:
             create_parser_get().parse_args()
             context=g.context
@@ -48,6 +48,7 @@ class IotDevice(Resource):
             params['input']['command']=command
             params['input']['value']=value
             params['input']['device']=internal_device_id
+            params['input']['port']=port
             execute_switch(context, plugin_context, params)
 
             result="OK"

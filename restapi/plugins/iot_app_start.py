@@ -15,6 +15,7 @@ def execute(context, plugin_context, params):
     logger.info("Init Iot jinja2 functions... done")
 
     AppInfo.get_api("solution").add_resource(get_endpoint(),"/iot/v1.0/device/<internal_device_id>/<value>/<command>", methods=['POST'])
+    AppInfo.get_api("solution").add_resource(get_endpoint(),"/iot/v1.0/device/<internal_device_id>/<value>/<port>/<command>", methods=['POST'])
     logger.info("Add endpoint for control iot devices... done")
 
 

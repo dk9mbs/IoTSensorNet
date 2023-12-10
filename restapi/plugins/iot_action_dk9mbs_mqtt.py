@@ -9,6 +9,8 @@ from core.setting import Setting
 from shared.model import *
 from services.mqtt_client import MqttClient
 
+from plugins.iot_common import IotLocation
+
 logger=log.create_logger(__name__)
 
 def __validate(params):
@@ -44,12 +46,6 @@ def execute(context, plugin_context, params):
     if 'port' in params['input']:
         port=params['input']['port']
 
-
-    if value=='on':
-        value="true"
-    else:
-        value="false"
-
     routing=iot_device_routing.objects(context).select().where(iot_device_routing.internal_device_id==device_id).to_entity()
     if routing==None:
         logger.error(f"Devicerouting not found: {device_id}")
@@ -62,9 +58,13 @@ def execute(context, plugin_context, params):
 
 
     with MqttClient(context) as client:
-        payload='{"id":"'+device_id+'", "src":"iot_restapi/shelly/status", "method":"Switch.Set", "params":{"id":0,"on":'+value+'}}'
-        topic=f"{device.id.value}/rpc"
-        client.publish(topic, payload)
+        payload='{"id":"'+device_id+'", \
+"method":"Switch.Set", \
+"port":"'+str(port)+'", \
+"src": "restapi/solution/iot/dk9mbs/status/rpc", \
+"status":"'+value+'"}'
+        location=IotLocation(context, device_id)
+        client.publish(f"restapi/solution/iot/dk9mbs/switch/{device.id.value}/rpc", payload)
 
     params['output']['status_code']=200
     params['output']['payload']="OK"

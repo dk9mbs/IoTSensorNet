@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS iot_device_vendor(
 
 INSERT IGNORE INTO iot_device_vendor(id, name) VALUES ('tuya','Tuya');
 INSERT IGNORE INTO iot_device_vendor(id, name) VALUES ('shelly','Shelly');
+INSERT IGNORE INTO iot_device_vendor(id, name) VALUES ('dk9mbs','DK9MBS Aktor Node');
 
 CREATE TABLE IF NOT EXISTS iot_device_class(
     id nvarchar(50) NOT NULL,
@@ -54,6 +55,7 @@ CREATE TABLE IF NOT EXISTS iot_device_class(
 INSERT IGNORE INTO iot_device_class(id, name) VALUES ('Bulb','Bulb');
 INSERT IGNORE INTO iot_device_class(id, name) VALUES ('Outlet','Wall outlet');
 INSERT IGNORE INTO iot_device_class(id, name) VALUES ('shellyplus1','Shelly Relais, 1 Kanal 16A');
+INSERT IGNORE INTO iot_device_class(id, name) VALUES ('dk9mbs_io_node','DK9MBS Aktor Node');
 
 CREATE TABLE IF NOT EXISTS iot_device_status (
     id varchar(50) NOT NULL,
@@ -141,6 +143,7 @@ CREATE TABLE IF NOT EXISTS iot_device_attribute(
 INSERT IGNORE INTO iot_device_attribute (name, vendor_id,class_id, device_attribute_key, is_boolean) VALUES ('power','tuya','Bulb','20',-1);
 INSERT IGNORE INTO iot_device_attribute (name, vendor_id,class_id, device_attribute_key, is_boolean) VALUES ('power','tuya','Outlet','1',-1);
 INSERT IGNORE INTO iot_device_attribute (name, vendor_id,class_id, device_attribute_key, is_boolean) VALUES ('power','shelly','shellyplus1','on',-1);
+INSERT IGNORE INTO iot_device_attribute (name, vendor_id,class_id, device_attribute_key, is_boolean) VALUES ('power','dk9mbs','dk9mbs_io_node','status',-1);
 
 CREATE TABLE IF NOT EXISTS iot_device_attribute_value(
     id int NOT NULL AUTO_INCREMENT COMMENT '',
@@ -715,7 +718,11 @@ INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type
 INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,solution_id)
     VALUES (10000012,'iot_action_set_last_heard','iot_action_set_last_heard','execute','before',100,10000);
 
+INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,run_async,solution_id)
+    VALUES (10000013,'iot_plugin_dk9mbs_sub_switsh_set','iot_dk9mbs_device_status','mqtt_message','after',100,0,10000);
 
+INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,run_async,solution_id)
+    VALUES (10000014,'iot_plugin_set_last_heard','iot_sys_pong','mqtt_message','after',100,0,10000);
 
 
 INSERT IGNORE INTO api_ui_app (id, name,description,home_url,solution_id)
@@ -761,6 +768,10 @@ INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) 
 INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
 10012,10000,'Sensor Changes','/ui/v1.0/data/view/iot_sensor_change/default',1,10000);
 
+
+INSERT IGNORE INTO api_mqtt_message_bus (id, topic, regex, alias, solution_id) VALUES (100000001, '+/rpc', '^shelly.*/rpc$', 'iot_shelly/',10000);
+INSERT IGNORE INTO api_mqtt_message_bus (id, topic, regex, alias, solution_id) VALUES (100000002, 'restapi/solution/iot/sys/node/pong', '^restapi/solution/iot/sys/node/pong$', 'iot_sys_pong/',10000);
+INSERT IGNORE INTO api_mqtt_message_bus (id, topic, regex, alias, solution_id) VALUES (100000003, 'restapi/solution/iot/dk9mbs/status/rpc', '^restapi/solution/iot/dk9mbs/status/rpc$', 'iot_dk9mbs_device_status/',10000);
 
 
 

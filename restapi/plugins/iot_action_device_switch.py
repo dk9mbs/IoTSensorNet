@@ -4,6 +4,7 @@ import json
 
 import plugins.iot_action_gw
 import plugins.iot_action_shelly_mqtt
+import plugins.iot_action_dk9mbs_mqtt
 
 from core.fetchxmlparser import FetchXmlParser
 from services.database import DatabaseServices
@@ -46,4 +47,6 @@ def execute(context, plugin_context, params):
         plugins.iot_action_gw.execute(context, plugin_context, params)
     elif device.vendor_id.value=='shelly':
         plugins.iot_action_shelly_mqtt.execute(context, plugin_context, params)
+    elif device.vendor_id.value=='dk9mbs':
+        plugins.iot_action_dk9mbs_mqtt.execute(context, plugin_context, params)
 

@@ -28,8 +28,9 @@
  * v1.9: MLX90614 implemented 
  * v1.9.1: setLastHeard implemented
  * v1.9.2: PubSubClient implemented (Adafruit lib replaced)
+ * v1.9.3:Device Node via mqtt implemented
 */
-const String nodeVersion="v1.9.2";
+const String nodeVersion="v1.9.3";
 
 #ifdef ESP32
 #pragma message(THIS EXAMPLE IS FOR ESP8266 ONLY!)
@@ -144,12 +145,15 @@ HTTPClient http;
 #if ENABLE_MQTT
 String sensorTopic=MQTT_PUB_TOPIC;
 PubSubClient mqtt(espClient);
+DynamicJsonDocument doc(1024);
 #endif
 
 #if ENABLE_DHT
 #include "DHT.h"
 DHT dht (DHT_PIN, DHT_TYPE);
 #endif
+
+
 
 #if ENABLE_RAINFALL
 //Niederschlag mit Wippe gezaehlt
@@ -193,14 +197,18 @@ long lastKey1PressedMs=0;
 int key1Status=0; //statemachine 
 
 #if ENABLE_MQTT
-String mqttPongTopic="restapi/solution/iot/sys/node/pong";
-String mqttSwitchTopic="restapi/solution/iot/node/switch";
-String mqttPingTopic="restapi/sys/ping";
+char mqttPongTopic[]="restapi/solution/iot/sys/node/pong";
+char mqttSwitchTopic[100];
+char mqttPingTopic[]="restapi/sys/ping";
+
+void setPin(int pin,  bool status) {
+  digitalWrite(pin, !status);
+}
 
 void switchCallback(char* topic, byte* payload, unsigned int length) {
   char buffer[500];
-  Serial.print(topic);
-  Serial.print(" ");
+  //Serial.print(topic);
+  //Serial.print(" ");
 
   for (int i=0;i<500;i++) {
     buffer[i]='\0';  
@@ -210,24 +218,46 @@ void switchCallback(char* topic, byte* payload, unsigned int length) {
     buffer[i]=(char)payload[i];
   }
   
-  Serial.println(buffer);
+  //Serial.println(buffer);
   
-  if ( strcmp(topic, mqttPingTopic.c_str())==0 ) {
-    mqtt.publish(mqttPongTopic.c_str(),lastHeard.c_str());
-  }
+  if ( strcmp(topic, mqttPingTopic)==0 ) {
+    mqtt.publish(mqttPongTopic,lastHeard.c_str());
+  } //ping
 
-  if ( strcmp(topic, mqttSwitchTopic.c_str())==0 ) {
-    DynamicJsonDocument doc(1024);
+  if ( strcmp(topic, mqttSwitchTopic)==0 ) {
     deserializeJson(doc, buffer);
-    const char* deviceId = doc["internal_device_id"];
-    const char* status = doc["status"];
 
-    if (strcmp(doc["node_name"], nodeName.c_str())==0) {
-      Serial.print(deviceId);
-      Serial.print(": ");
-      Serial.println(status);
+    char deviceId[100];
+    char status[10];
+    char method[50];
+    char src[50];
+    int port;
+    
+    strcpy(deviceId, doc["id"]);
+    strcpy(status, doc["status"]);
+    strcpy(method, doc["method"]);
+    strcpy(src, doc["src"]);
+    //Serial.println(buffer);
+    //strcat(src, "/rpc");
+    
+    port=atoi(doc["port"]);
+
+    if( port==0 and strcmp(status, "on")==0  ) {
+      setPin(SIMPLEPORTSWITCH1_PIN, HIGH);
     }
-  }
+
+    if(port==0 and strcmp(status, "off")==0 ) {
+      setPin(SIMPLEPORTSWITCH1_PIN, LOW);
+    }
+
+    doc["method"]="Notify";
+    doc["dst"]=doc["src"];
+    doc["src"]=nodeName;
+    char out[1024];
+    serializeJson(doc, out);
+    mqtt.publish(src,out);
+
+  } //switch
 
 }
 #endif
@@ -256,13 +286,22 @@ void setup() {
   restApiSHAFingerPrint=readConfigValue("hostsha1fingerprint");
   //insecure=readConfigValue("insecure");
   insecure=stringToBool(readConfigValue("insecure").c_str());
-  lastHeard="{\"node_name\":\""+nodeName+"\",\"node_version\":\""+nodeVersion+"\"}";
+
+  #if ENABLE_MQTT
+  strcpy(mqttSwitchTopic, "restapi/solution/iot/dk9mbs/switch/");
+  strcat(mqttSwitchTopic,nodeName.c_str());
+  strcat(mqttSwitchTopic,"/rpc");
+  #endif
   
   Serial.println("");Serial.println("=====================================");
   Serial.print("Version:"); Serial.println(nodeVersion);
   Serial.print("API endpoint:");Serial.println(restApiUrl);
   Serial.print("API user:");Serial.println(restApiUser);
   Serial.print("Displaymode:");Serial.println(String(displayMode));
+  #if ENABLE_MQTT
+  Serial.println("=====================MQTT============");
+  Serial.print("MQTT Switch Topic:");Serial.println(mqttSwitchTopic);
+  #endif
   Serial.println("=====================================");
 
   if(digitalRead(SETUPPIN)==0) runSetup=true;
@@ -284,7 +323,7 @@ void setup() {
     printLcd(lcd, 0,0, "connecting WLAN",1);
     printLcd(lcd, 0,1, nodeVersion,0);
     #endif
-    
+
     setupHttpAdmin();
     String mode=readConfigValue("mode");
     mode.toUpperCase();
@@ -304,6 +343,7 @@ void setup() {
     }
 
     setupWifiSTA(readConfigValue("ssid").c_str(), readConfigValue("password").c_str(), readConfigValue("mac").c_str(), modeDeepSleep);
+    lastHeard="{\"node_name\":\""+nodeName+"\",\"node_version\":\""+nodeVersion+"\",\"ip_address\":\""+WiFi.localIP().toString()+"\"}";
 
     #if ENABLE_ESPNOW_SUB || ENABLE_ESPNOW_PUB
     setupEspNow();
@@ -348,7 +388,7 @@ void setup() {
 
     #if ENABLE_SIMPLEPORTSWITCH
     pinMode(SIMPLEPORTSWITCH1_PIN, OUTPUT);
-    digitalWrite(SIMPLEPORTSWITCH1_PIN, LOW);
+    setPin(SIMPLEPORTSWITCH1_PIN, LOW);
     #endif
 
     #if ENABLE_BMP
@@ -1113,8 +1153,8 @@ void mqttConnect() {
          while (1);
        }
   }
-  mqtt.subscribe(mqttPingTopic.c_str());
-  mqtt.subscribe(mqttSwitchTopic.c_str());
+  mqtt.subscribe(mqttPingTopic);
+  mqtt.subscribe(mqttSwitchTopic);
   
   Serial.print("MQTT Connected with state:");
   Serial.println(mqtt.state());
