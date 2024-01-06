@@ -725,7 +725,10 @@ INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type
     VALUES (10000014,'iot_plugin_set_last_heard','iot_sys_pong','mqtt_message','after',100,0,10000);
 
 INSERT IGNORE INTO api_event_handler(id,plugin_module_name,publisher,event,type,run_async,config,solution_id) 
-    VALUES (10000015,'api_mqtt_endpoint','iot_sensor_data','insert','after',-1,'{"filter": "[\'sensor_id\', \'sensor_value\']"}',10000);
+    VALUES (
+        10000015,'api_mqtt_endpoint','iot_sensor_data','insert','after',-1,
+        '{"endpoint":"restapi/solution/iot/event/$publisher/$trigger/$value_sensor_id", "filter": "[\'sensor_id\', \'sensor_value\']"}',
+        10000);
 
 
 INSERT IGNORE INTO api_ui_app (id, name,description,home_url,solution_id)
