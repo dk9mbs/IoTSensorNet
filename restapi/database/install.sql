@@ -727,7 +727,7 @@ INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type
 INSERT IGNORE INTO api_event_handler(id,plugin_module_name,publisher,event,type,run_async,config,solution_id) 
     VALUES (
         10000015,'api_mqtt_endpoint','iot_sensor_data','insert','after',-1,
-        '{"endpoint":"restapi/solution/iot/event/$publisher/$trigger/$value_sensor_id", "filter": "[\'sensor_id\', \'sensor_value\']"}',
+        '{"endpoint":"restapi/$instance/solution/iot/event/$publisher/$trigger/$value_sensor_id", "filter": "[\'sensor_id\', \'sensor_value\']"}',
         10000);
 
 
