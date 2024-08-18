@@ -730,6 +730,9 @@ INSERT IGNORE INTO api_event_handler(id,plugin_module_name,publisher,event,type,
         '{"endpoint":"restapi/$instance/solution/iot/event/$publisher/$trigger/$value_sensor_id", "filter": "[\'sensor_id\', \'sensor_value\']"}',
         10000);
 
+INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,run_async,solution_id)
+    VALUES (10000016,'iot_action_dew_point','iot_action_dew_point','execute','before',100,0,10000);
+
 
 INSERT IGNORE INTO api_ui_app (id, name,description,home_url,solution_id)
 VALUES (
