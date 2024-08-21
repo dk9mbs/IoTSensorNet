@@ -362,6 +362,21 @@ CREATE TABLE IF NOT EXISTS iot_sensor_change(
     FOREIGN KEY(sensor_id) REFERENCES iot_sensor(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+CREATE TABLE IF NOT EXISTS iot_dew_point_sensor(
+    id int NOT NULL AUTO_INCREMENT COMMENT '',
+    name varchar(100) NOT NULL COMMENT '',
+    sensor_id varchar(250) NOT NULL COMMENT '',
+    temperature_sensor_id varchar(250) NOT NULL COMMENT '',
+    humidity_sensor_id varchar(250) NOT NULL COMMENT '',
+    last_value decimal(15,4) DEFAULT NULL,
+    last_value_on datetime DEFAULT NULL,
+    created_on datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '',
+    CONSTRAINT `foreign_reference_iot_dew_point_sensorsensor_id` FOREIGN KEY(sensor_id) REFERENCES iot_sensor(id),
+    CONSTRAINT `foreign_reference_iot_dew_point_sensor_temp_sensor_id` FOREIGN KEY(temperature_sensor_id) REFERENCES iot_sensor(id),
+    CONSTRAINT `foreign_reference_iot_dew_point_sensor_hum_sensor_id` FOREIGN KEY(humidity_sensor_id) REFERENCES iot_sensor(id),
+    PRIMARY KEY(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
 INSERT IGNORE INTO api_user (id,username,password,is_admin,disabled,solution_id) VALUES (10000,'IoTSrv','password',0,0,10000);
 INSERT IGNORE INTO api_user (id,username,password,is_admin,disabled,solution_id) VALUES (10001,'IoTAdmin','password',0,-1,10000);
 
@@ -456,6 +471,10 @@ INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,des
     VALUES
     (10020,'iot_sensor_change','iot_sensor_change','id','int','change_text',10000);
 
+INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
+    VALUES
+    (10021,'iot_dew_point_sensor','iot_dew_point_sensor','id','int','name',10000);
+
 INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10017, 'ID','id','int','{"disabled": true}');
 INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10017, 'Erstellt am','created_on','datetime','{"disabled": true}');
 INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10018, 'ID','id','int','{"disabled": true}');
@@ -546,6 +565,16 @@ call api_proc_create_table_field_instance(10020,100, 'change_date','Datum','date
 call api_proc_create_table_field_instance(10020,100, 'change_text','Text','string',18,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10020,100, 'created_on','Erstellt am','datetime',9,'{"disabled": true}', @out_value);
 
+/* dew_point_sensor */
+call api_proc_create_table_field_instance(10021,100, 'id','ID','int',14,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10021,200, 'name','Bezeichnung','int',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10021,300, 'temperature_sensor_id','Temperatur Sensor','int',2,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10021,400, 'humidity_sensor_id','Rel. Luftfeuchte Sensor','int',2,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10021,500, 'sensor_id','Ergebnise Sensor','int',2,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10021,600, 'last_value','Letzter Wert','datetime',14,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10021,700, 'last_value_on','Letzter Wert am','datetime',9,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10021,800, 'created_on','Erstellt am','datetime',9,'{"disabled": true}', @out_value);
+
 
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
@@ -611,6 +640,9 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
     (10000,10020,0,-1,0,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
+    VALUES
+    (10000,10021,0,-1,0,10000);
 
 
 
@@ -679,6 +711,9 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
     VALUES
     (10001,10020,-1,-1,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
+    VALUES
+    (10001,10021,-1,-1,-1,-1,10000);
 
 
 
@@ -776,6 +811,9 @@ INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) 
 
 INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
 10012,10000,'Sensor Changes','/ui/v1.0/data/view/iot_sensor_change/default',1,10000);
+
+INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
+10013,10000,'Taupunkt Sensoren','/ui/v1.0/data/view/iot_dew_point_sensor/default',1,10000);
 
 
 INSERT IGNORE INTO api_mqtt_message_bus (id, topic, regex, alias, solution_id) VALUES (100000001, '+/rpc', '^shelly.*/rpc$', 'iot_shelly/',10000);
@@ -1190,5 +1228,15 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
     </select>
 </restapi>');
 
-
+INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml, columns) VALUES (
+10026,'LISTVIEW','default',10021,'id',10000,'<restapi type="select">
+    <table name="iot_dew_point_sensor" alias="r"/>
+    <filter type="or">
+        <condition field="temperature_sensor_id" alias="r" value="$$query$$" operator="$$operator$$"/>
+        <condition field="name" alias="r" value="$$query$$" operator="$$operator$$"/>
+    </filter>
+    <orderby>
+        <field name="id" alias="r" sort="ASC"/>
+    </orderby>
+</restapi>', '{"id": {},"name": {}}');
 
