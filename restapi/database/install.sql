@@ -256,6 +256,8 @@ INSERT IGNORE INTO iot_sensor_type (id, name) VALUES (2, 'DHT 11');
 INSERT IGNORE INTO iot_sensor_type (id, name) VALUES (3, 'DHT 22');
 INSERT IGNORE INTO iot_sensor_type (id, name) VALUES (4, 'BMP180');
 INSERT IGNORE INTO iot_sensor_type (id, name) VALUES (5, 'MLX 90614');
+INSERT IGNORE INTO iot_sensor_type (id, name) VALUES (6, 'Taupunkt Berechnung');
+INSERT IGNORE INTO iot_sensor_type (id, name) VALUES (7, 'DWD API');
 
 CREATE TABLE IF NOT EXISTS iot_sensor (
     id varchar(250) NOT NULL COMMENT 'unique id',
@@ -365,15 +367,15 @@ CREATE TABLE IF NOT EXISTS iot_sensor_change(
 CREATE TABLE IF NOT EXISTS iot_dew_point_sensor(
     id int NOT NULL AUTO_INCREMENT COMMENT '',
     name varchar(100) NOT NULL COMMENT '',
-    sensor_id varchar(250) NOT NULL COMMENT '',
-    temperature_sensor_id varchar(250) NOT NULL COMMENT '',
-    humidity_sensor_id varchar(250) NOT NULL COMMENT '',
-    last_value decimal(15,4) DEFAULT NULL,
-    last_value_on datetime DEFAULT NULL,
+    dew_point_sensor_id varchar(250) NOT NULL COMMENT '',
+    abs_hum_sensor_id varchar(250) NOT NULL COMMENT '',
+    temp_sensor_id varchar(250) NOT NULL COMMENT '',
+    rel_hum_sensor_id varchar(250) NOT NULL COMMENT '',
     created_on datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '',
-    CONSTRAINT `foreign_reference_iot_dew_point_sensorsensor_id` FOREIGN KEY(sensor_id) REFERENCES iot_sensor(id),
-    CONSTRAINT `foreign_reference_iot_dew_point_sensor_temp_sensor_id` FOREIGN KEY(temperature_sensor_id) REFERENCES iot_sensor(id),
-    CONSTRAINT `foreign_reference_iot_dew_point_sensor_hum_sensor_id` FOREIGN KEY(humidity_sensor_id) REFERENCES iot_sensor(id),
+    CONSTRAINT `foreign_reference_iot_dew_point_dew_point_sensor_id` FOREIGN KEY(dew_point_sensor_id) REFERENCES iot_sensor(id),
+    CONSTRAINT `foreign_reference_iot_dew_point_abs_hum_sensor_id` FOREIGN KEY(abs_hum_sensor_id) REFERENCES iot_sensor(id),
+    CONSTRAINT `foreign_reference_iot_dew_point_sensor_temp_sensor_id` FOREIGN KEY(temp_sensor_id) REFERENCES iot_sensor(id),
+    CONSTRAINT `foreign_reference_iot_dew_point_sensor_rel_hum_sensor_id` FOREIGN KEY(rel_hum_sensor_id) REFERENCES iot_sensor(id),
     PRIMARY KEY(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
@@ -566,13 +568,13 @@ call api_proc_create_table_field_instance(10020,100, 'change_text','Text','strin
 call api_proc_create_table_field_instance(10020,100, 'created_on','Erstellt am','datetime',9,'{"disabled": true}', @out_value);
 
 /* dew_point_sensor */
+DELETE FROM api_table_field WHERE table_id=10021;
 call api_proc_create_table_field_instance(10021,100, 'id','ID','int',14,'{"disabled": true}', @out_value);
 call api_proc_create_table_field_instance(10021,200, 'name','Bezeichnung','int',1,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10021,300, 'temperature_sensor_id','Temperatur Sensor','int',2,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10021,400, 'humidity_sensor_id','Rel. Luftfeuchte Sensor','int',2,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10021,500, 'sensor_id','Ergebnise Sensor','int',2,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10021,600, 'last_value','Letzter Wert','datetime',14,'{"disabled": true}', @out_value);
-call api_proc_create_table_field_instance(10021,700, 'last_value_on','Letzter Wert am','datetime',9,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10021,300, 'temp_sensor_id','Temperatur Sensor (Eingang)','int',2,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10021,400, 'rel_hum_sensor_id','Rel. Luftfeuchte Sensor (Eingang)','int',2,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10021,500, 'dew_point_sensor_id','Taupunkt Sensor (Ausgang)','int',2,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10021,500, 'abs_hum_sensor_id','Abs. Luftfeuchte Sensor (Ausgang)','int',2,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10021,800, 'created_on','Erstellt am','datetime',9,'{"disabled": true}', @out_value);
 
 
@@ -767,6 +769,12 @@ INSERT IGNORE INTO api_event_handler(id,plugin_module_name,publisher,event,type,
 
 INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,run_async,solution_id)
     VALUES (10000016,'iot_action_dew_point','iot_action_dew_point','execute','before',100,0,10000);
+
+INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,solution_id)
+    VALUES (10000017,'iot_plugin_calc_dew_point','iot_sensor_data','insert','before',100,10000);
+
+
+
 
 
 INSERT IGNORE INTO api_ui_app (id, name,description,home_url,solution_id)
@@ -1232,7 +1240,7 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
 10026,'LISTVIEW','default',10021,'id',10000,'<restapi type="select">
     <table name="iot_dew_point_sensor" alias="r"/>
     <filter type="or">
-        <condition field="temperature_sensor_id" alias="r" value="$$query$$" operator="$$operator$$"/>
+        <condition field="temp_sensor_id" alias="r" value="$$query$$" operator="$$operator$$"/>
         <condition field="name" alias="r" value="$$query$$" operator="$$operator$$"/>
     </filter>
     <orderby>
