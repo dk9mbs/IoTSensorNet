@@ -63,7 +63,7 @@ def execute(context, plugin_context, params):
                 fetchparser=FetchXmlParser(fetch, context)
                 DatabaseServices.exec(fetchparser, context, run_as_system=True)            
 
-            if not rec['aps_hum_sensor_id'] == None:
+            if not rec['abs_hum_sensor_id'] == None:
                 fetch=f"""
                 <restapi type="insert">
                     <table name="iot_sensor_data"/>
