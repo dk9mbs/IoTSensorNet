@@ -773,6 +773,8 @@ INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type
 INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,solution_id)
     VALUES (10000017,'iot_plugin_calc_dew_point','iot_sensor_data','insert','before',100,10000);
 
+INSERT IGNORE INTO api_event_handler(id,plugin_module_name,publisher,event,type,run_async,solution_id) 
+    VALUES (10000018,'iot_plugin_sensor_watchdog','$timer_every_minute','execute','after',0,10000);
 
 
 
