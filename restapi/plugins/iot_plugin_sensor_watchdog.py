@@ -8,7 +8,7 @@ from services.activity import Activity
 logger=log.create_logger(__name__)
 
 def _validate(params):
-    if 'data' not in params:
+    if 'input' not in params:
         return False
     return True
 
@@ -37,8 +37,9 @@ def execute(context, plugin_context, params):
     """
 
     fetchparser=FetchXmlParser(fetch, context)
-    rs=DatabaseServices.exec(fetchparser, context, run_as_system=True)
-    if not rs.get_eoif():
+    rs=DatabaseServices.exec(fetchparser, context, run_as_system=True, fetch_mode=0)
+
+    if not rs.get_eof():
         tools=Activity(context)
-        tools.create_alert_if_not_exists("IOT Sensor Fehler (Watchdog)", "Ein oder mehrere Sensoren liefern keine Messwerte!", "iot-sensoer-watchdog-error", 1)
-    
+        tools.create_alert_if_not_exists("IOT Sensor Fehler (Watchdog)", 
+            "Ein oder mehrere Sensoren liefern keine Messwerte!", "iot-sensoer-watchdog-error", 1)
