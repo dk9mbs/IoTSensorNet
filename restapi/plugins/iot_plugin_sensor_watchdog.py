@@ -42,4 +42,4 @@ def execute(context, plugin_context, params):
     if not rs.get_eof():
         tools=Activity(context)
         tools.create_alert_if_not_exists("IOT Sensor Fehler (Watchdog)", 
-            "Ein oder mehrere Sensoren liefern keine Messwerte!", "iot-sensoer-watchdog-error", 1)
+            "Ein oder mehrere Sensoren liefern keine Messwerte!", "iot-sensor-watchdog-error", 1)
