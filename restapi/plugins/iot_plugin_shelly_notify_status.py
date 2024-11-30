@@ -1,0 +1,37 @@
+import datetime
+import json
+
+from core.fetchxmlparser import FetchXmlParser
+from services.database import DatabaseServices
+from core import log
+from shared.model import *
+from services.mqtt_client import MqttClient
+
+logger=log.create_logger(__name__)
+
+def __validate(params):
+    if 'data' not in params:
+        return False
+    if 'method' not in params['data']:
+        return False
+    if 'id' not in params['data']:
+        return False
+    if 'params' not in params['data']:
+        return False
+    if 'topic' not in params:
+        return False
+
+    return True
+
+def execute(context, plugin_context, params):
+    print (params)
+    if not __validate(params):
+        logger.warning(f"Missings params {params}")
+        return
+
+
+    #device=iot_device.objects(context).select().where(iot_device.id==shelly_external_id)
+    #if device==None:
+    #    logger.warning(f"Device not found in iot_device {shelly_external_id}")
+    #    return
+

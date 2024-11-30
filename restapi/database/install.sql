@@ -95,6 +95,15 @@ CREATE TABLE IF NOT EXISTS iot_device(
 ALTER TABLE iot_device ADD COLUMN IF NOT EXISTS network_ssid varchar(250) NULL;
 ALTER TABLE iot_device ADD COLUMN IF NOT EXISTS network_rssi int NOT NULL DEFAULT '0';
 
+CREATE TABLE IF NOT EXISTS iot_device_channel(
+    id int NOT NULL AUTO_INCREMENT COMMENT 'Unique ID',
+    name varchar(50) NOT NULL COMMENT 'Alias for the chanel',
+    device_id varchar(250) NOT NULL COMMENT 'ID of the device',
+    channel varchar(50) NOT NULL COMMENT 'Name of the device channel',
+    channel_value varchar(50) NULL COMMENT 'Current value of the channel',
+    PRIMARY KEY(id),
+    FOREIGN KEY(device_id) REFERENCES iot_device(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 CREATE TABLE IF NOT EXISTS iot_device_categorie_class_mapping(
     id int NOT NULL AUTO_INCREMENT COMMENT '',
@@ -477,6 +486,11 @@ INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,des
     VALUES
     (10021,'iot_dew_point_sensor','iot_dew_point_sensor','id','int','name',10000);
 
+INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
+    VALUES
+    (10022,'iot_device_channel','iot_device_channel','id','int','name',10000);
+
+
 INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10017, 'ID','id','int','{"disabled": true}');
 INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10017, 'Erstellt am','created_on','datetime','{"disabled": true}');
 INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10018, 'ID','id','int','{"disabled": true}');
@@ -577,6 +591,13 @@ call api_proc_create_table_field_instance(10021,500, 'dew_point_sensor_id','Taup
 call api_proc_create_table_field_instance(10021,500, 'abs_hum_sensor_id','Abs. Luftfeuchte Sensor (Ausgang)','int',2,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10021,800, 'created_on','Erstellt am','datetime',9,'{"disabled": true}', @out_value);
 
+/* device_channel */
+call api_proc_create_table_field_instance(10022,100, 'id','ID','int',14,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10022,200, 'name','Bezeichnung','int',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10022,300, 'device_id','Device','string',2,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10022,400, 'channel','Kanal (Device)','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10022,500, 'channel_value','Last value','string',1,'{"disabled": false}', @out_value);
+
 
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
@@ -645,6 +666,9 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
     (10000,10021,0,-1,0,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
+    VALUES
+    (10000,10022,0,-1,0,10000);
 
 
 
@@ -716,6 +740,9 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
     VALUES
     (10001,10021,-1,-1,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
+    VALUES
+    (10001,10022,-1,-1,-1,-1,10000);
 
 
 
@@ -776,6 +803,10 @@ INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type
 INSERT IGNORE INTO api_event_handler(id,plugin_module_name,publisher,event,type,run_async,solution_id) 
     VALUES (10000018,'iot_plugin_sensor_watchdog','$timer_every_minute','execute','after',0,10000);
 
+INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,run_async,solution_id)
+    VALUES (10000019,'iot_plugin_shelly_notify_status','iot_shelly_events','mqtt_message','after',100,0,10000);
+
+
 
 
 
@@ -827,8 +858,11 @@ INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) 
 
 
 INSERT IGNORE INTO api_mqtt_message_bus (id, topic, regex, alias, solution_id) VALUES (100000001, '+/rpc', '^shelly.*/rpc$', 'iot_shelly/',10000);
+UPDATE api_mqtt_message_bus SET regex='^shelly.*-[0-9a-z]{12,}\/rpc$' WHERE id=100000001 AND regex='^shelly.*/rpc$';
+
 INSERT IGNORE INTO api_mqtt_message_bus (id, topic, regex, alias, solution_id) VALUES (100000002, 'restapi/solution/iot/sys/node/pong', '^restapi/solution/iot/sys/node/pong$', 'iot_sys_pong/',10000);
 INSERT IGNORE INTO api_mqtt_message_bus (id, topic, regex, alias, solution_id) VALUES (100000003, 'restapi/solution/iot/dk9mbs/status/rpc', '^restapi/solution/iot/dk9mbs/status/rpc$', 'iot_dk9mbs_device_status/',10000);
+INSERT IGNORE INTO api_mqtt_message_bus (id, topic, regex, alias, solution_id) VALUES (100000004, '+/events/rpc', '^shelly.*/events/rpc$', 'iot_shelly_events/',10000);
 
 
 
@@ -1250,3 +1284,14 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
     </orderby>
 </restapi>', '{"id": {},"name": {}}');
 
+INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml, columns) VALUES (
+10027,'LISTVIEW','default',10022,'id',10000,'<restapi type="select">
+    <table name="iot_device_channel" alias="r"/>
+    <filter type="or">
+        <condition field="name" alias="r" value="$$query$$" operator="$$operator$$"/>
+        <condition field="device_id" alias="r" value="$$query$$" operator="$$operator$$"/>
+    </filter>
+    <orderby>
+        <field name="id" alias="r" sort="ASC"/>
+    </orderby>
+</restapi>', '{"id": {},"name": {},"channel":{}, "channel_value":{} }');
