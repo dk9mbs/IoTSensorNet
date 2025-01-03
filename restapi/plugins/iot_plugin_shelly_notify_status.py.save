@@ -1,4 +1,3 @@
-
 import datetime
 import json
 
@@ -55,15 +54,12 @@ def execute(context, plugin_context, params):
         device.name.value=id
         device.address.value=address
         device.vendor_id.value="shelly"
-        device.network_rssi.value=wlan_rssi
         device.network_ssid.value=wlan_ssid
-        device.last_scan_on.value=datetime.datetime.now()
+        device.network_rssi.value=wlan_rssi
         device.insert(context)
     else:
         device.address.value=address
-        device.network_rssi.value=wlan_rssi
-        device.network_ssid.value=wlan_ssid
-        device.last_scan_on.value=datetime.datetime.now()
+NotifyFullStatus
         device.update(context)
         
     #device=iot_device.objects(context).select().where(iot_device.id==shelly_external_id)
