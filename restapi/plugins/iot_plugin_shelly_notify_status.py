@@ -1,4 +1,3 @@
-
 import datetime
 import json
 
@@ -13,13 +12,7 @@ logger=log.create_logger(__name__)
 def _validate(params):
     if 'data' not in params:
         return False
-    if 'method' not in params['data']:
-        return False
     if 'src' not in params['data']:
-        return False
-    if 'params' not in params['data']:
-        return False
-    if 'wifi' not in params['data']['params']:
         return False
 
     return True
@@ -29,8 +22,17 @@ def execute(context, plugin_context, params):
         logger.warning(f"Missings params {params}")
         return
 
-    method=params['data']['method']
-    if method!='NotifyFullStatus':
+    wlan=None
+    if 'params' in params['data']:
+        if 'wifi' in params['data']['params']:
+            wlan=params['data']['params']['wifi']
+
+    if 'result' in params['data']:
+        if 'wifi' in params['data']['result']:
+            wlan=params['data']['result']['wifi']
+
+    if wlan==None:
+        logger.warning(f"Missing params or result {params}")
         return
 
     id=params['data']['src']
@@ -38,15 +40,9 @@ def execute(context, plugin_context, params):
     wlan_rssi=0
     wlan_ssid=""
 
-    if 'sta_ip' in params['data']['params']['wifi']:
-        address=params['data']['params']['wifi']['sta_ip']
-
-    if 'rssi' in params['data']['params']['wifi']:
-        wlan_rssi=params['data']['params']['wifi']['rssi']
-
-    if 'ssid' in params['data']['params']['wifi']:
-        wlan_ssid=params['data']['params']['wifi']['ssid']
-
+    address=wlan['sta_ip']
+    wlan_rssi=wlan['rssi']
+    wlan_ssid=wlan['ssid']
 
     device=iot_device.objects(context).select().where(iot_device.id==id).to_entity()
     if device==None:
@@ -66,8 +62,3 @@ def execute(context, plugin_context, params):
         device.last_scan_on.value=datetime.datetime.now()
         device.update(context)
         
-    #device=iot_device.objects(context).select().where(iot_device.id==shelly_external_id)
-    #if device==None:
-    #    logger.warning(f"Device not found in iot_device {shelly_external_id}")
-    #    return
-
