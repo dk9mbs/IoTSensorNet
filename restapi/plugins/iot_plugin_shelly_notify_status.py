@@ -14,8 +14,8 @@ def _validate(params):
         return False
     if 'src' not in params['data']:
         return False
-    if 'id' not in params['data']:
-        return False
+    #if 'id' not in params['data']:
+    #    return False
 
     return True
 
@@ -25,7 +25,10 @@ def execute(context, plugin_context, params):
         return
 
     src=params['data']['src']
-    id=params['data']['id']
+    id=""
+
+    if 'id' in params['data']:
+        id=params['data']['id']
 
     device=iot_device.objects(context).select().where(iot_device.id==src).to_entity()
     if device==None:
@@ -33,6 +36,7 @@ def execute(context, plugin_context, params):
         device.id.value=src
         device.name.value=src
         device.vendor_id.value="shelly"
+        device.address.value="0.0.0.0"
         device.insert(context)
 
     wlan=None
