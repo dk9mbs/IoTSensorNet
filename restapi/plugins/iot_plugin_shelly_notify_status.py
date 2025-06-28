@@ -66,7 +66,7 @@ def execute(context, plugin_context, params):
                 switch=value
                 channel_id=str(key).split(":")[1]
 
-                channel=iot_device.objects(context).select().where(iot_device_channel.device_id==src).where(iot_device_channel.channel==channel_id) .to_entity()
+                channel=iot_device_channel.objects(context).select().where(iot_device_channel.device_id==src).where(iot_device_channel.channel==channel_id) .to_entity()
                 if channel==None:
                     channel=iot_device_channel()
                     channel.device_id.value=src
