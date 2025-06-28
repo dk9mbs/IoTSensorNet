@@ -64,13 +64,20 @@ def execute(context, plugin_context, params):
         for key, value in shelly_params.items():
             if str(key).startswith("switch"):
                 switch=value
+                channel_id=str(key).split(":")[1]
 
-                channel=iot_device_channel()
-                channel.device_id.value=src
-                channel.channel.value=str(key).split(":")[1]
-                channel.name.value="<new>"
-                channel.channel_value.value=switch['output']
-                channel.insert(context)
+                channel=iot_device.objects(context).select().where(iot_device_channel.device_id==src).where(iot_device_channel.channel==channel_id) .to_entity()
+                if channel==None:
+                    channel=iot_device_channel()
+                    channel.device_id.value=src
+                    channel.channel.value=str(key).split(":")[1]
+                    channel.name.value="<new>"
+                    channel.channel_value.value=switch['output']
+                    channel.insert(context)
+                else:
+                    channel.channel_value.value=switch['output']
+                    channel.update(context)
+
                 #print(f"{key} --> {value}")
 
     if version_available!=None:
