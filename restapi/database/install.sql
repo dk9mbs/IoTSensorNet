@@ -538,6 +538,16 @@ call api_proc_create_table_field_instance(10012,1500, 'last_scan_on','Letzter Sc
 call api_proc_create_table_field_instance(10012,1600, 'network_ssid','Netzwerk SSID','string',1,'{"disabled": true}', @out_value);
 call api_proc_create_table_field_instance(10012,1700, 'network_rssi','RSSI (Netzwerk)','int',14,'{"disabled": true}', @out_value);
 
+/* iot_device_channel */
+call api_proc_create_table_field_instance(10022,100, 'id','ID','int',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10022,200, 'name','Bezeichnung','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10022,300, 'alias','Alias','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10022,400, 'device_id','Device','string',2,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10022,500, 'channel','Kanal','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10022,600, 'Channel_value','Letzter Wert','string',1,'{"disabled": false}', @out_value);
+
+
+
 /* iot_device_routing */
 call api_proc_create_table_field_instance(10017,100, 'id','ID','int',14,'{"disabled": true}', @out_value);
 call api_proc_create_table_field_instance(10017,200, 'internal_device_id','Interne ID','string',1,'{"disabled": false}', @out_value);
