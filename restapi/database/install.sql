@@ -100,12 +100,16 @@ ALTER TABLE iot_device ADD COLUMN IF NOT EXISTS version_available varchar(50) NU
 CREATE TABLE IF NOT EXISTS iot_device_channel(
     id int NOT NULL AUTO_INCREMENT COMMENT 'Unique ID',
     name varchar(50) NOT NULL COMMENT 'Alias for the chanel',
+    alias varchar(50) NULL COMMENT 'Alias for this channel',
     device_id varchar(250) NOT NULL COMMENT 'ID of the device',
     channel varchar(50) NOT NULL COMMENT 'Name of the device channel',
     channel_value varchar(50) NULL COMMENT 'Current value of the channel',
     PRIMARY KEY(id),
     FOREIGN KEY(device_id) REFERENCES iot_device(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+ALTER TABLE iot_device_channel ADD COLUMN IF NOT EXISTS alias varchar(50) NULL  COMMENT 'Alias for this channel' AFTER name;
+
 
 CREATE TABLE IF NOT EXISTS iot_device_categorie_class_mapping(
     id int NOT NULL AUTO_INCREMENT COMMENT '',
@@ -1297,4 +1301,4 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
     <orderby>
         <field name="id" alias="r" sort="ASC"/>
     </orderby>
-</restapi>', '{"id": {},"name": {},"channel":{}, "channel_value":{} }');
+</restapi>', '{"id": {},"device_id":{},"alias":{},"name": {},"channel":{}, "channel_value":{} }');
