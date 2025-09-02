@@ -273,6 +273,7 @@ INSERT IGNORE INTO iot_sensor_type (id, name) VALUES (4, 'BMP180');
 INSERT IGNORE INTO iot_sensor_type (id, name) VALUES (5, 'MLX 90614');
 INSERT IGNORE INTO iot_sensor_type (id, name) VALUES (6, 'Taupunkt Berechnung');
 INSERT IGNORE INTO iot_sensor_type (id, name) VALUES (7, 'DWD API');
+INSERT IGNORE INTO iot_sensor_type (id, name) VALUES (8, 'Shelly BLE H&T');
 
 CREATE TABLE IF NOT EXISTS iot_sensor (
     id varchar(250) NOT NULL COMMENT 'unique id',
@@ -823,6 +824,8 @@ INSERT IGNORE INTO api_event_handler(id,plugin_module_name,publisher,event,type,
 INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,run_async,solution_id)
     VALUES (10000019,'iot_plugin_shelly_notify_status','iot_shelly_events','mqtt_message','after',100,0,10000);
 
+INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,run_async,solution_id)
+    VALUES (10000020,'iot_plugin_shelly_ble_sensor','iot_shelly_ble_events','mqtt_message','after',100,0,10000);
 
 
 
@@ -880,7 +883,7 @@ UPDATE api_mqtt_message_bus SET regex='^shelly.*-[0-9a-z]{12,}\/rpc$' WHERE id=1
 INSERT IGNORE INTO api_mqtt_message_bus (id, topic, regex, alias, solution_id) VALUES (100000002, 'restapi/solution/iot/sys/node/pong', '^restapi/solution/iot/sys/node/pong$', 'iot_sys_pong/',10000);
 INSERT IGNORE INTO api_mqtt_message_bus (id, topic, regex, alias, solution_id) VALUES (100000003, 'restapi/solution/iot/dk9mbs/status/rpc', '^restapi/solution/iot/dk9mbs/status/rpc$', 'iot_dk9mbs_device_status/',10000);
 INSERT IGNORE INTO api_mqtt_message_bus (id, topic, regex, alias, solution_id) VALUES (100000004, '+/events/rpc', '^shelly.*/events/rpc$', 'iot_shelly_events/',10000);
-
+INSERT IGNORE INTO api_mqtt_message_bus (id, topic, regex, alias, solution_id) VALUES (100000005, 'shelly/ble/gateway/+', '^shelly/ble/gateway/.{17}$', 'iot_shelly_ble_events/',10000);
 
 
 /* Listviews */
