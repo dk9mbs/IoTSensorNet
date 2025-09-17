@@ -80,9 +80,9 @@ def execute(context, plugin_context, params):
 
                 #print(f"{key} --> {value}")
 
-    if version_available!=None:
-        device.version_available.value=version_available
-        device.last_scan_on.value=datetime.datetime.now()
+    #if version_available!=None:
+    device.version_available.value=version_available
+    device.last_scan_on.value=datetime.datetime.now()
 
     if version!=None:
         device.version.value=version
