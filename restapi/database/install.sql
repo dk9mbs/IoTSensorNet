@@ -6,6 +6,20 @@ DELETE FROM api_event_handler WHERE solution_id=10000;
 
 INSERT IGNORE INTO api_solution(id,name) VALUES (10000, 'IoTSensorNet');
 
+CREATE TABLE IF NOT EXISTS iot_device_log(
+    id int NOT NULL AUTO_INCREMENT COMMENT 'Unique ID',
+    device_id varchar(250) NOT NULL COMMENT '' COMMENT 'Device ID references to iot_device',
+    channel varchar(50) NOT NULL DEFAULT '0' COMMENT 'Name/ID of the channel',
+    channel_value varchar(50) NULL DEFAULT '0' COMMENT 'Value/Status',
+    action_type varchar(50) NOT NULL DEFAULT 'NOACTION' COMMENT 'INPUT, SWITCH or NOTDEFINED',
+    device_channel_id int NULL COMMENT '',
+    message text NULL COMMENT 'Message if exists (JSON)',
+    created_on timestamp default CURRENT_TIMESTAMP NOT NULL COMMENT '',
+    PRIMARY KEY(id),
+    FOREIGN KEY(device_id) REFERENCES iot_device(id),
+    FOREIGN KEY(device_channel_id) REFERENCES iot_device_channel(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
 CREATE TABLE IF NOT EXISTS iot_location(
     id int NOT NULL AUTO_INCREMENT,
     name varchar(50) NOT NULL,
@@ -44,6 +58,7 @@ CREATE TABLE IF NOT EXISTS iot_device_vendor(
 
 INSERT IGNORE INTO iot_device_vendor(id, name) VALUES ('tuya','Tuya');
 INSERT IGNORE INTO iot_device_vendor(id, name) VALUES ('shelly','Shelly');
+INSERT IGNORE INTO iot_device_vendor(id, name) VALUES ('govee','Govee');
 INSERT IGNORE INTO iot_device_vendor(id, name) VALUES ('dk9mbs','DK9MBS Aktor Node');
 
 CREATE TABLE IF NOT EXISTS iot_device_class(
@@ -497,6 +512,10 @@ INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,des
     VALUES
     (10022,'iot_device_channel','iot_device_channel','id','int','name',10000);
 
+INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
+    VALUES
+    (10023,'iot_device_log','iot_device_log','id','int','action_type',10000);
+
 
 INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10017, 'ID','id','int','{"disabled": true}');
 INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10017, 'Erstellt am','created_on','datetime','{"disabled": true}');
@@ -546,6 +565,16 @@ call api_proc_create_table_field_instance(10022,300, 'alias','Alias','string',1,
 call api_proc_create_table_field_instance(10022,400, 'device_id','Device','string',2,'{"disabled": true}', @out_value);
 call api_proc_create_table_field_instance(10022,500, 'channel','Kanal','string',1,'{"disabled": true}', @out_value);
 call api_proc_create_table_field_instance(10022,600, 'Channel_value','Letzter Wert','string',1,'{"disabled": true}', @out_value);
+
+/* iot_device_log */
+call api_proc_create_table_field_instance(10023,100, 'id','ID','int',1,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10023,200, 'action_type','BezeichnungAktion','string',1,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10023,400, 'device_id','Device','string',2,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10023,450, 'device_channel_id','Kanal','int',2,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10023,500, 'channel','Kanal','string',1,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10023,500, 'channel_value','Wert/Status','string',1,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10023,500, 'message','Nachricht','string',1,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10023,600, 'created_on','Erstellt am','datetime',9,'{"disabled": true}', @out_value);
 
 
 

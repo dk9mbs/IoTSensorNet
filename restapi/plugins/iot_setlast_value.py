@@ -6,7 +6,7 @@ from core import log
 
 logger=log.create_logger(__name__)
 
-def __validate(params):
+def _validate(params):
     if 'data' not in params:
         return False
     if 'sensor_value' not in params['data']:
@@ -17,7 +17,7 @@ def __validate(params):
     return True
 
 def execute(context, plugin_context, params):
-    if not __validate(params):
+    if not _validate(params):
         logger.warning(f"Missings params")
         return
 
