@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS iot_device(
 ALTER TABLE iot_device ADD COLUMN IF NOT EXISTS network_ssid varchar(250) NULL;
 ALTER TABLE iot_device ADD COLUMN IF NOT EXISTS network_rssi int NOT NULL DEFAULT '0';
 ALTER TABLE iot_device ADD COLUMN IF NOT EXISTS version_available varchar(50) NULL AFTER version;
+ALTER TABLE iot_device ADD COLUMN IF NOT EXISTS notify smallint NOT NULL DEFAULT '-1' COMMENT 'Notify in case of watchdog errors';
 
 CREATE TABLE IF NOT EXISTS iot_device_channel(
     id int NOT NULL AUTO_INCREMENT COMMENT 'Unique ID',
@@ -557,6 +558,7 @@ call api_proc_create_table_field_instance(10012,1400, 'created_on','Erstellt am'
 call api_proc_create_table_field_instance(10012,1500, 'last_scan_on','Letzter Scan','datetime',9,'{"disabled": true}', @out_value);
 call api_proc_create_table_field_instance(10012,1600, 'network_ssid','Netzwerk SSID','string',1,'{"disabled": true}', @out_value);
 call api_proc_create_table_field_instance(10012,1700, 'network_rssi','RSSI (Netzwerk)','int',14,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10012,1800, 'notify','Benachrichtigungen','int',19,'{"disabled": false}', @out_value);
 
 /* iot_device_channel */
 call api_proc_create_table_field_instance(10022,100, 'id','ID','int',1,'{"disabled": true}', @out_value);
