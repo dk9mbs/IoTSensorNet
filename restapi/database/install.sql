@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS iot_device(
 ALTER TABLE iot_device ADD COLUMN IF NOT EXISTS network_ssid varchar(250) NULL;
 ALTER TABLE iot_device ADD COLUMN IF NOT EXISTS network_rssi int NOT NULL DEFAULT '0';
 ALTER TABLE iot_device ADD COLUMN IF NOT EXISTS version_available varchar(50) NULL AFTER version;
+ALTER TABLE iot_device ADD COLUMN IF NOT EXISTS notify smallint NOT NULL DEFAULT '-1' COMMENT 'Notify in case of watchdog errors';
 
 CREATE TABLE IF NOT EXISTS iot_device_channel(
     id int NOT NULL AUTO_INCREMENT COMMENT 'Unique ID',
@@ -558,10 +559,11 @@ call api_proc_create_table_field_instance(10012,1500, 'last_scan_on','Letzter Sc
 call api_proc_create_table_field_instance(10012,1600, 'network_ssid','Netzwerk SSID','string',1,'{"disabled": true}', @out_value);
 call api_proc_create_table_field_instance(10012,1700, 'network_rssi','RSSI (Netzwerk)','int',14,'{"disabled": true}', @out_value);
 call api_proc_create_table_field_instance(10012,1800, '_channel','Channel','string',200,'{"columns": "id,name,alias,channel"}', @out_value);
-/*UPDATE api_table_field
+UPDATE api_table_field
     SET is_virtual=-1, field_name='id',referenced_table_name='iot_device_channel',referenced_table_id=10022,referenced_field_name='device_id'
-    WHERE id=@out_value; */
+    WHERE id=@out_value;
 
+call api_proc_create_table_field_instance(10012,1900, 'notify','Benachrichtigungen','int',19,'{"disabled": false}', @out_value);
 
 /* iot_device_channel */
 call api_proc_create_table_field_instance(10022,100, 'id','ID','int',1,'{"disabled": true}', @out_value);
@@ -570,13 +572,11 @@ call api_proc_create_table_field_instance(10022,300, 'alias','Alias','string',1,
 call api_proc_create_table_field_instance(10022,400, 'device_id','Device','string',2,'{"disabled": true}', @out_value);
 call api_proc_create_table_field_instance(10022,500, 'channel','Kanal','string',1,'{"disabled": true}', @out_value);
 call api_proc_create_table_field_instance(10022,600, 'channel_value','Letzter Wert','string',1,'{"disabled": true}', @out_value);
-
-/*
 call api_proc_create_table_field_instance(10022,700, '_vendor_id','Hersteller','string',1,'{"disabled": true}', @out_value);
 UPDATE api_table_field
     SET is_virtual=-1, field_name='id',referenced_table_name='iot_device',referenced_table_id=10012,referenced_field_name='vendor_id',
     is_lookup=-1, referenced_value_field_name='vendor_id' 
-    WHERE id=@out_value;*/
+    WHERE id=@out_value;
 
 
 
