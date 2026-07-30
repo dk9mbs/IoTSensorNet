@@ -572,7 +572,7 @@ call api_proc_create_table_field_instance(10022,300, 'alias','Alias','string',1,
 call api_proc_create_table_field_instance(10022,400, 'device_id','Device','string',2,'{"disabled": true}', @out_value);
 call api_proc_create_table_field_instance(10022,500, 'channel','Kanal','string',1,'{"disabled": true}', @out_value);
 call api_proc_create_table_field_instance(10022,600, 'channel_value','Letzter Wert','string',1,'{"disabled": true}', @out_value);
-call api_proc_create_table_field_instance(10022,700, '_vendor_id','Hersteller','string',1,'{"disabled": true}', @out_value);
+/*call api_proc_create_table_field_instance(10022,700, '_vendor_id','Hersteller','string',1,'{"disabled": true}', @out_value);*/
 /*UPDATE api_table_field
     SET is_virtual=-1, field_name='id',referenced_table_name='iot_device',referenced_table_id=10012,referenced_field_name='vendor_id',
     is_lookup=-1, referenced_value_field_name='vendor_id' 
