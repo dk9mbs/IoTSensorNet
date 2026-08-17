@@ -7,7 +7,7 @@ from core.jinjaenv import JinjaEnvironment
 from flask import abort
 #from flask import Blueprint
 from flask import request, g, abort
-from flask_restplus import Resource, Api, reqparse
+from flask_restx import Resource, Api, reqparse
 from core.exceptions import RestApiNotAllowed
 from core import log
 
