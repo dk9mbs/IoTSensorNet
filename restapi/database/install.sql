@@ -413,6 +413,34 @@ CREATE TABLE IF NOT EXISTS iot_dew_point_sensor(
     PRIMARY KEY(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+/*
+Agenten (IoT-Dashboard): zentrale Konfiguration pro Rechner.
+Der Agenten-Runner (agents/run_agents.py) holt sich mit dem API-Key von
+IoTSrv seinen Eintrag aus iot_agent_host und die Agenten aus iot_agent_config.
+*/
+CREATE TABLE IF NOT EXISTS iot_agent_host(
+    id varchar(100) NOT NULL COMMENT 'Rechnername, z.B. nextcloud',
+    description varchar(250) NULL,
+    enabled smallint NOT NULL DEFAULT '-1',
+    last_seen_on timestamp NULL COMMENT 'letzter Abruf durch den Runner',
+    created_on timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+CREATE TABLE IF NOT EXISTS iot_agent_config(
+    id int NOT NULL AUTO_INCREMENT,
+    host_id varchar(100) NOT NULL,
+    agent varchar(100) NOT NULL COMMENT 'Ordnername unter agents/, z.B. nmap',
+    enabled smallint NOT NULL DEFAULT '0',
+    every_minutes int NOT NULL DEFAULT '5',
+    timeout_seconds int NOT NULL DEFAULT '300',
+    settings text NULL COMMENT 'JSON mit den Einstellungen des Agenten',
+    created_on timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY(id),
+    UNIQUE KEY(host_id, agent),
+    CONSTRAINT `foreign_reference_iot_agent_config_host_id` FOREIGN KEY(host_id) REFERENCES iot_agent_host(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
 INSERT IGNORE INTO api_user (id,username,password,is_admin,disabled,solution_id) VALUES (10000,'IoTSrv','password',0,0,10000);
 INSERT IGNORE INTO api_user (id,username,password,is_admin,disabled,solution_id) VALUES (10001,'IoTAdmin','password',0,-1,10000);
 
@@ -519,6 +547,14 @@ INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,des
     VALUES
     (10023,'iot_device_log','iot_device_log','id','int','action_type',10000);
 
+INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
+    VALUES
+    (10024,'iot_agent_host','iot_agent_host','id','string','id',10000);
+
+INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
+    VALUES
+    (10025,'iot_agent_config','iot_agent_config','id','int','agent',10000);
+
 
 INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10017, 'ID','id','int','{"disabled": true}');
 INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10017, 'Erstellt am','created_on','datetime','{"disabled": true}');
@@ -591,6 +627,23 @@ call api_proc_create_table_field_instance(10023,500, 'channel','Kanal','string',
 call api_proc_create_table_field_instance(10023,500, 'channel_value','Wert/Status','string',1,'{"disabled": true}', @out_value);
 call api_proc_create_table_field_instance(10023,500, 'message','Nachricht','string',1,'{"disabled": true}', @out_value);
 call api_proc_create_table_field_instance(10023,600, 'created_on','Erstellt am','datetime',9,'{"disabled": true}', @out_value);
+
+/* iot_agent_host */
+call api_proc_create_table_field_instance(10024,100, 'id','Rechner','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10024,200, 'description','Beschreibung','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10024,300, 'enabled','Aktiv','int',19,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10024,400, 'last_seen_on','Zuletzt gesehen','datetime',9,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10024,500, 'created_on','Erstellt am','datetime',9,'{"disabled": true}', @out_value);
+
+/* iot_agent_config */
+call api_proc_create_table_field_instance(10025,100, 'id','ID','int',14,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10025,200, 'host_id','Rechner','string',2,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10025,300, 'agent','Agent','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10025,400, 'enabled','Aktiv','int',19,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10025,500, 'every_minutes','Intervall (Min.)','int',14,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10025,600, 'timeout_seconds','Timeout (Sek.)','int',14,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10025,700, 'settings','Einstellungen (JSON)','string',101,'{"disabled": false, "mode":"ace/mode/json"}', @out_value);
+call api_proc_create_table_field_instance(10025,800, 'created_on','Erstellt am','datetime',9,'{"disabled": true}', @out_value);
 
 
 
@@ -734,6 +787,12 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
     (10000,51,0,-1,0,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
+    VALUES
+    (10000,10024,0,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
+    VALUES
+    (10000,10025,0,-1,0,10000);
 
 
 
@@ -811,6 +870,12 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
     VALUES
     (10001,51,-1,-1,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
+    VALUES
+    (10001,10024,-1,-1,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
+    VALUES
+    (10001,10025,-1,-1,-1,-1,10000);
 
 
 
@@ -925,6 +990,12 @@ INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) 
 
 INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
 10013,10000,'Taupunkt Sensoren','/ui/v1.0/data/view/iot_dew_point_sensor/default',1,10000);
+
+INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
+10014,10000,'Agenten Rechner','/ui/v1.0/data/view/iot_agent_host/default',1,10000);
+
+INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
+10015,10000,'Agenten Konfiguration','/ui/v1.0/data/view/iot_agent_config/default',1,10000);
 
 
 INSERT IGNORE INTO api_mqtt_message_bus (id, topic, regex, alias, solution_id) VALUES (100000001, '+/rpc', '^shelly.*/rpc$', 'iot_shelly/',10000);
@@ -1365,3 +1436,28 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
         <field name="id" alias="r" sort="ASC"/>
     </orderby>
 </restapi>', '{"id": {},"device_id":{},"alias":{},"name": {},"channel":{}, "channel_value":{} }');
+
+INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml, columns) VALUES (
+10028,'LISTVIEW','default',10024,'id',10000,'<restapi type="select">
+    <table name="iot_agent_host" alias="h"/>
+    <filter type="or">
+        <condition field="id" alias="h" value="$$query$$" operator="$$operator$$"/>
+        <condition field="description" alias="h" value="$$query$$" operator="$$operator$$"/>
+    </filter>
+    <orderby>
+        <field name="id" alias="h" sort="ASC"/>
+    </orderby>
+</restapi>', '{"id": {},"description": {},"enabled": {},"last_seen_on": {}}');
+
+INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml, columns) VALUES (
+10029,'LISTVIEW','default',10025,'id',10000,'<restapi type="select">
+    <table name="iot_agent_config" alias="c"/>
+    <filter type="or">
+        <condition field="host_id" alias="c" value="$$query$$" operator="$$operator$$"/>
+        <condition field="agent" alias="c" value="$$query$$" operator="$$operator$$"/>
+    </filter>
+    <orderby>
+        <field name="host_id" alias="c" sort="ASC"/>
+        <field name="agent" alias="c" sort="ASC"/>
+    </orderby>
+</restapi>', '{"id": {},"host_id": {},"agent": {},"enabled": {},"every_minutes": {},"timeout_seconds": {}}');
