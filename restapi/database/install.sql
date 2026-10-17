@@ -583,6 +583,7 @@ call api_proc_create_table_field_instance(10012,200, 'name','Bezeichnung','strin
 call api_proc_create_table_field_instance(10012,300, 'product_id','Product ID (Hersteller)','string',1,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10012,400, 'product_name','Product Name (Hersteller)','string',1,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10012,500, 'address','Adresse','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10012,500, 'mac','MAC','string',1,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10012,600, 'local_key','Lokaler Key (API)','string',1,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10012,700, 'version','Version','string',1,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10012,700, 'version_available','Verfügbare Version','string',1,'{"disabled": true}', @out_value);
