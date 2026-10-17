@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS iot_device(
     product_id nvarchar(250) NULL,
     product_name nvarchar(250) NULL,
     address nvarchar(50) NOT NULL,
+    mac varchar(100) NULL COMMENT 'mac address',
     local_key nvarchar(100) NULL,
     version nvarchar(50) NOT NULL DEFAULT '0',
     version_available varchar(50) NULL,
@@ -111,6 +112,7 @@ CREATE TABLE IF NOT EXISTS iot_device(
 ALTER TABLE iot_device ADD COLUMN IF NOT EXISTS network_ssid varchar(250) NULL;
 ALTER TABLE iot_device ADD COLUMN IF NOT EXISTS network_rssi int NOT NULL DEFAULT '0';
 ALTER TABLE iot_device ADD COLUMN IF NOT EXISTS version_available varchar(50) NULL AFTER version;
+ALTER TABLE iot_device ADD COLUMN IF NOT EXISTS mac varchar(100) NULL AFTER address;
 ALTER TABLE iot_device ADD COLUMN IF NOT EXISTS notify smallint NOT NULL DEFAULT '-1' COMMENT 'Notify in case of watchdog errors';
 
 CREATE TABLE IF NOT EXISTS iot_device_channel(
@@ -696,7 +698,6 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
     (10000,10011,0,-1,0,10000);
-
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
     (10000,10012,-1,-1,-1,10000);
@@ -730,6 +731,9 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
     (10000,10022,0,-1,0,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
+    VALUES
+    (10000,51,0,-1,0,10000);
 
 
 
@@ -804,6 +808,9 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
     VALUES
     (10001,10022,-1,-1,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
+    VALUES
+    (10001,51,-1,-1,-1,-1,10000);
 
 
 
