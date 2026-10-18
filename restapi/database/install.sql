@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS iot_device(
     product_id nvarchar(250) NULL,
     product_name nvarchar(250) NULL,
     address nvarchar(50) NOT NULL,
+    host_name varchar(100) NULL COMMENT 'host name',
     mac varchar(100) NULL COMMENT 'mac address',
     local_key nvarchar(100) NULL,
     version nvarchar(50) NOT NULL DEFAULT '0',
@@ -113,6 +114,7 @@ ALTER TABLE iot_device ADD COLUMN IF NOT EXISTS network_ssid varchar(250) NULL;
 ALTER TABLE iot_device ADD COLUMN IF NOT EXISTS network_rssi int NOT NULL DEFAULT '0';
 ALTER TABLE iot_device ADD COLUMN IF NOT EXISTS version_available varchar(50) NULL AFTER version;
 ALTER TABLE iot_device ADD COLUMN IF NOT EXISTS mac varchar(100) NULL AFTER address;
+ALTER TABLE iot_device ADD COLUMN IF NOT EXISTS host_name varchar(100) NULL AFTER address;
 ALTER TABLE iot_device ADD COLUMN IF NOT EXISTS notify smallint NOT NULL DEFAULT '-1' COMMENT 'Notify in case of watchdog errors';
 
 CREATE TABLE IF NOT EXISTS iot_device_channel(
@@ -583,6 +585,7 @@ call api_proc_create_table_field_instance(10012,200, 'name','Bezeichnung','strin
 call api_proc_create_table_field_instance(10012,300, 'product_id','Product ID (Hersteller)','string',1,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10012,400, 'product_name','Product Name (Hersteller)','string',1,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10012,500, 'address','Adresse','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10012,500, 'host_name','Hostname','string',1,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10012,500, 'mac','MAC','string',1,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10012,600, 'local_key','Lokaler Key (API)','string',1,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10012,700, 'version','Version','string',1,'{"disabled": false}', @out_value);
