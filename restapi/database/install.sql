@@ -429,6 +429,40 @@ CREATE TABLE IF NOT EXISTS iot_agent_host(
     PRIMARY KEY(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+/*
+Ausgabetyp eines Agenten: wie der Runner die JSON-Ausgabe des Agenten auf
+stdout ({"data": [...]}) verarbeitet.
+*/
+CREATE TABLE IF NOT EXISTS iot_agent_output_type(
+    id int NOT NULL,
+    name varchar(100) NOT NULL,
+    created_on timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+INSERT IGNORE INTO iot_agent_output_type(id, name) VALUES (1, 'No Action');
+INSERT IGNORE INTO iot_agent_output_type(id, name) VALUES (2, 'Add Sensor Value');
+INSERT IGNORE INTO iot_agent_output_type(id, name) VALUES (3, 'Add/Update Device');
+INSERT IGNORE INTO iot_agent_output_type(id, name) VALUES (4, 'Update Device');
+
+/* Stammdaten der Agenten (unabhaengig vom Rechner) */
+CREATE TABLE IF NOT EXISTS iot_agent(
+    id varchar(100) NOT NULL COMMENT 'Ordnername unter agents/, z.B. nmap',
+    description varchar(250) NULL,
+    output_type_id int NOT NULL DEFAULT '1',
+    created_on timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY(id),
+    CONSTRAINT `foreign_reference_iot_agent_output_type_id` FOREIGN KEY(output_type_id) REFERENCES iot_agent_output_type(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+ALTER TABLE iot_agent ADD COLUMN IF NOT EXISTS output_type_id int NOT NULL DEFAULT '1' AFTER description;
+
+INSERT IGNORE INTO iot_agent(id, description) VALUES ('nmap', 'Netzwerk-Scan, traegt Geraete in iot_device ein');
+INSERT IGNORE INTO iot_agent(id, description) VALUES ('shelly', 'Fragt die Shellys per HTTP ab');
+INSERT IGNORE INTO iot_agent(id, description) VALUES ('omada_syslog', 'WLAN-Score aus den Omada-Syslogs');
+INSERT IGNORE INTO iot_agent(id, description) VALUES ('notify', 'Benachrichtigungen (Nextcloud Talk, Telegram)');
+INSERT IGNORE INTO iot_agent(id, description) VALUES ('disk_usage', 'Festplattenbelegung des Rechners');
+
 CREATE TABLE IF NOT EXISTS iot_agent_config(
     id int NOT NULL AUTO_INCREMENT,
     host_id varchar(100) NOT NULL,
@@ -440,8 +474,14 @@ CREATE TABLE IF NOT EXISTS iot_agent_config(
     created_on timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
     PRIMARY KEY(id),
     UNIQUE KEY(host_id, agent),
-    CONSTRAINT `foreign_reference_iot_agent_config_host_id` FOREIGN KEY(host_id) REFERENCES iot_agent_host(id)
+    CONSTRAINT `foreign_reference_iot_agent_config_host_id` FOREIGN KEY(host_id) REFERENCES iot_agent_host(id),
+    CONSTRAINT `foreign_reference_iot_agent_config_agent` FOREIGN KEY(agent) REFERENCES iot_agent(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+/* bestehende Installationen: bereits konfigurierte Agenten anlegen, dann den Fremdschluessel */
+INSERT IGNORE INTO iot_agent(id) SELECT DISTINCT agent FROM iot_agent_config;
+ALTER TABLE iot_agent_config ADD CONSTRAINT `foreign_reference_iot_agent_config_agent`
+    FOREIGN KEY IF NOT EXISTS (agent) REFERENCES iot_agent(id);
 
 INSERT IGNORE INTO api_user (id,username,password,is_admin,disabled,solution_id) VALUES (10000,'IoTSrv','password',0,0,10000);
 INSERT IGNORE INTO api_user (id,username,password,is_admin,disabled,solution_id) VALUES (10001,'IoTAdmin','password',0,-1,10000);
@@ -557,6 +597,14 @@ INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,des
     VALUES
     (10025,'iot_agent_config','iot_agent_config','id','int','agent',10000);
 
+INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
+    VALUES
+    (10026,'iot_agent_output_type','iot_agent_output_type','id','int','name',10000);
+
+INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
+    VALUES
+    (10027,'iot_agent','iot_agent','id','string','id',10000);
+
 
 INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10017, 'ID','id','int','{"disabled": true}');
 INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10017, 'Erstellt am','created_on','datetime','{"disabled": true}');
@@ -642,12 +690,23 @@ call api_proc_create_table_field_instance(10024,500, 'created_on','Erstellt am',
 /* iot_agent_config */
 call api_proc_create_table_field_instance(10025,100, 'id','ID','int',14,'{"disabled": true}', @out_value);
 call api_proc_create_table_field_instance(10025,200, 'host_id','Rechner','string',2,'{"disabled": false}', @out_value);
-call api_proc_create_table_field_instance(10025,300, 'agent','Agent','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10025,300, 'agent','Agent','string',2,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10025,400, 'enabled','Aktiv','int',19,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10025,500, 'every_minutes','Intervall (Min.)','int',14,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10025,600, 'timeout_seconds','Timeout (Sek.)','int',14,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10025,700, 'settings','Einstellungen (JSON)','string',101,'{"disabled": false, "mode":"ace/mode/json"}', @out_value);
 call api_proc_create_table_field_instance(10025,800, 'created_on','Erstellt am','datetime',9,'{"disabled": true}', @out_value);
+
+/* iot_agent_output_type */
+call api_proc_create_table_field_instance(10026,100, 'id','ID','int',14,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10026,200, 'name','Bezeichnung','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10026,300, 'created_on','Erstellt am','datetime',9,'{"disabled": true}', @out_value);
+
+/* iot_agent */
+call api_proc_create_table_field_instance(10027,100, 'id','Agent','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10027,200, 'description','Beschreibung','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10027,300, 'output_type_id','Ausgabetyp','int',2,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10027,400, 'created_on','Erstellt am','datetime',9,'{"disabled": true}', @out_value);
 
 
 
@@ -797,6 +856,12 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
     (10000,10025,0,-1,0,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
+    VALUES
+    (10000,10026,0,-1,0,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
+    VALUES
+    (10000,10027,0,-1,0,10000);
 
 
 
@@ -880,6 +945,12 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
     VALUES
     (10001,10025,-1,-1,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
+    VALUES
+    (10001,10026,-1,-1,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
+    VALUES
+    (10001,10027,-1,-1,-1,-1,10000);
 
 
 
@@ -1000,6 +1071,9 @@ INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) 
 
 INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
 10015,10000,'Agenten Konfiguration','/ui/v1.0/data/view/iot_agent_config/default',1,10000);
+
+INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
+10016,10000,'Agenten','/ui/v1.0/data/view/iot_agent/default',1,10000);
 
 
 INSERT IGNORE INTO api_mqtt_message_bus (id, topic, regex, alias, solution_id) VALUES (100000001, '+/rpc', '^shelly.*/rpc$', 'iot_shelly/',10000);
@@ -1465,3 +1539,26 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
         <field name="agent" alias="c" sort="ASC"/>
     </orderby>
 </restapi>', '{"id": {},"host_id": {},"agent": {},"enabled": {},"every_minutes": {},"timeout_seconds": {}}');
+
+INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml, columns) VALUES (
+10030,'LISTVIEW','default',10026,'id',10000,'<restapi type="select">
+    <table name="iot_agent_output_type" alias="t"/>
+    <filter type="or">
+        <condition field="name" alias="t" value="$$query$$" operator="$$operator$$"/>
+    </filter>
+    <orderby>
+        <field name="id" alias="t" sort="ASC"/>
+    </orderby>
+</restapi>', '{"id": {},"name": {}}');
+
+INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml, columns) VALUES (
+10031,'LISTVIEW','default',10027,'id',10000,'<restapi type="select">
+    <table name="iot_agent" alias="a"/>
+    <filter type="or">
+        <condition field="id" alias="a" value="$$query$$" operator="$$operator$$"/>
+        <condition field="description" alias="a" value="$$query$$" operator="$$operator$$"/>
+    </filter>
+    <orderby>
+        <field name="id" alias="a" sort="ASC"/>
+    </orderby>
+</restapi>', '{"id": {},"description": {},"output_type_id": {}}');
