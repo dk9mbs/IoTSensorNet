@@ -539,6 +539,12 @@ CREATE TABLE IF NOT EXISTS iot_notification(
     CONSTRAINT `foreign_reference_iot_notification_status_id` FOREIGN KEY(status_id) REFERENCES iot_notification_status(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+/* Meldungstexte enthalten Emojis (4 Byte) - nur die Textspalten auf utf8mb4,
+   status_id muss wegen des Fremdschluessels utf8 bleiben */
+ALTER TABLE iot_notification
+    MODIFY message varchar(1000) CHARACTER SET utf8mb4 NOT NULL,
+    MODIFY last_error varchar(250) CHARACTER SET utf8mb4 NULL;
+
 INSERT IGNORE INTO api_user (id,username,password,is_admin,disabled,solution_id) VALUES (10000,'IoTSrv','password',0,0,10000);
 INSERT IGNORE INTO api_user (id,username,password,is_admin,disabled,solution_id) VALUES (10001,'IoTAdmin','password',0,-1,10000);
 
