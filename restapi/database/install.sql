@@ -427,7 +427,7 @@ CREATE TABLE IF NOT EXISTS iot_agent_host(
     last_seen_on timestamp NULL COMMENT 'letzter Abruf durch den Runner',
     created_on timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
     PRIMARY KEY(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 /*
 Ausgabetyp eines Agenten: wie der Runner die JSON-Ausgabe des Agenten auf
@@ -438,7 +438,7 @@ CREATE TABLE IF NOT EXISTS iot_agent_output_type(
     name varchar(100) NOT NULL,
     created_on timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
     PRIMARY KEY(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 INSERT IGNORE INTO iot_agent_output_type(id, name) VALUES (1, 'No Action');
 INSERT IGNORE INTO iot_agent_output_type(id, name) VALUES (2, 'Add Sensor Value');
@@ -454,7 +454,7 @@ CREATE TABLE IF NOT EXISTS iot_agent(
     created_on timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
     PRIMARY KEY(id),
     CONSTRAINT `foreign_reference_iot_agent_output_type_id` FOREIGN KEY(output_type_id) REFERENCES iot_agent_output_type(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 ALTER TABLE iot_agent ADD COLUMN IF NOT EXISTS output_type_id int NOT NULL DEFAULT '1' AFTER description;
 
@@ -481,7 +481,7 @@ CREATE TABLE IF NOT EXISTS iot_agent_config(
     UNIQUE KEY(host_id, agent),
     CONSTRAINT `foreign_reference_iot_agent_config_host_id` FOREIGN KEY(host_id) REFERENCES iot_agent_host(id),
     CONSTRAINT `foreign_reference_iot_agent_config_agent` FOREIGN KEY(agent) REFERENCES iot_agent(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 /* bestehende Installationen: bereits konfigurierte Agenten anlegen, dann den Fremdschluessel */
 INSERT IGNORE INTO iot_agent(id) SELECT DISTINCT agent FROM iot_agent_config;
@@ -504,7 +504,7 @@ CREATE TABLE IF NOT EXISTS iot_agent_status(
     PRIMARY KEY(id),
     UNIQUE KEY(config_id),
     CONSTRAINT `foreign_reference_iot_agent_status_config_id` FOREIGN KEY(config_id) REFERENCES iot_agent_config(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 /*
 Warteschlange der Benachrichtigungen. Jeder Agent kann Meldungen einstellen
@@ -518,7 +518,7 @@ CREATE TABLE IF NOT EXISTS iot_notification_status(
     name varchar(100) NOT NULL,
     created_on timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
     PRIMARY KEY(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 INSERT IGNORE INTO iot_notification_status(id, name) VALUES ('new', 'Neu');
 INSERT IGNORE INTO iot_notification_status(id, name) VALUES ('sent', 'Gesendet');
@@ -537,13 +537,20 @@ CREATE TABLE IF NOT EXISTS iot_notification(
     KEY(status_id),
     CONSTRAINT `foreign_reference_iot_notification_config_id` FOREIGN KEY(config_id) REFERENCES iot_agent_config(id) ON DELETE SET NULL,
     CONSTRAINT `foreign_reference_iot_notification_status_id` FOREIGN KEY(status_id) REFERENCES iot_notification_status(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-/* Meldungstexte enthalten Emojis (4 Byte) - nur die Textspalten auf utf8mb4,
-   status_id muss wegen des Fremdschluessels utf8 bleiben */
-ALTER TABLE iot_notification
-    MODIFY message varchar(1000) CHARACTER SET utf8mb4 NOT NULL,
-    MODIFY last_error varchar(250) CHARACTER SET utf8mb4 NULL;
+/* Agenten-Tabellen auf utf8mb4 (Meldungen enthalten Emojis mit 4 Byte).
+   Fuer bestehende Installationen; alle zusammen, weil die Fremdschluessel-
+   Spalten denselben Zeichensatz haben muessen. Mehrfach ausfuehrbar. */
+SET FOREIGN_KEY_CHECKS=0;
+ALTER TABLE iot_agent_host CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE iot_agent_output_type CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE iot_agent CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE iot_agent_config CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE iot_agent_status CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE iot_notification_status CONVERT TO CHARACTER SET utf8mb4;
+ALTER TABLE iot_notification CONVERT TO CHARACTER SET utf8mb4;
+SET FOREIGN_KEY_CHECKS=1;
 
 INSERT IGNORE INTO api_user (id,username,password,is_admin,disabled,solution_id) VALUES (10000,'IoTSrv','password',0,0,10000);
 INSERT IGNORE INTO api_user (id,username,password,is_admin,disabled,solution_id) VALUES (10001,'IoTAdmin','password',0,-1,10000);
