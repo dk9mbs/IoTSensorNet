@@ -444,6 +444,7 @@ INSERT IGNORE INTO iot_agent_output_type(id, name) VALUES (1, 'No Action');
 INSERT IGNORE INTO iot_agent_output_type(id, name) VALUES (2, 'Add Sensor Value');
 INSERT IGNORE INTO iot_agent_output_type(id, name) VALUES (3, 'Add/Update Device');
 INSERT IGNORE INTO iot_agent_output_type(id, name) VALUES (4, 'Update Device');
+INSERT IGNORE INTO iot_agent_output_type(id, name) VALUES (5, 'Update Notification');
 
 /* Stammdaten der Agenten (unabhaengig vom Rechner) */
 CREATE TABLE IF NOT EXISTS iot_agent(
@@ -462,6 +463,10 @@ INSERT IGNORE INTO iot_agent(id, description) VALUES ('shelly', 'Fragt die Shell
 INSERT IGNORE INTO iot_agent(id, description) VALUES ('omada_syslog', 'WLAN-Score aus den Omada-Syslogs');
 INSERT IGNORE INTO iot_agent(id, description) VALUES ('notify', 'Benachrichtigungen (Nextcloud Talk, Telegram)');
 INSERT IGNORE INTO iot_agent(id, description) VALUES ('disk_usage', 'Festplattenbelegung des Rechners');
+INSERT IGNORE INTO iot_agent(id, description, output_type_id) VALUES ('watchdog', 'Erkennt auffaellige Geraete/Sensoren, stellt Meldungen in iot_notification', 1);
+/* notify verschickt nur noch die Warteschlange iot_notification und setzt sie ueber den Runner auf erledigt */
+UPDATE iot_agent SET description='Verschickt die Meldungen aus iot_notification (Nextcloud Talk, Telegram)', output_type_id=5
+    WHERE id='notify' AND output_type_id=1;
 
 CREATE TABLE IF NOT EXISTS iot_agent_config(
     id int NOT NULL AUTO_INCREMENT,
@@ -499,6 +504,39 @@ CREATE TABLE IF NOT EXISTS iot_agent_status(
     PRIMARY KEY(id),
     UNIQUE KEY(config_id),
     CONSTRAINT `foreign_reference_iot_agent_status_config_id` FOREIGN KEY(config_id) REFERENCES iot_agent_config(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+/*
+Warteschlange der Benachrichtigungen. Jeder Agent kann Meldungen einstellen
+({"data": [...], "notify": ["Text", ...]}), der Runner legt sie mit status 'new'
+an. Ein Versand-Agent (notify) verschickt die offenen Meldungen und setzt sie
+ueber den Runner (Ausgabetyp 'Update Notification') auf 'sent' bzw. 'failed'.
+config_id: Agent, der die Meldung erzeugt hat (NULL bei lokaler Konfiguration).
+*/
+CREATE TABLE IF NOT EXISTS iot_notification_status(
+    id varchar(20) NOT NULL,
+    name varchar(100) NOT NULL,
+    created_on timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+INSERT IGNORE INTO iot_notification_status(id, name) VALUES ('new', 'Neu');
+INSERT IGNORE INTO iot_notification_status(id, name) VALUES ('sent', 'Gesendet');
+INSERT IGNORE INTO iot_notification_status(id, name) VALUES ('failed', 'Fehlgeschlagen');
+
+CREATE TABLE IF NOT EXISTS iot_notification(
+    id int NOT NULL AUTO_INCREMENT,
+    config_id int NULL,
+    message varchar(1000) NOT NULL,
+    status_id varchar(20) NOT NULL DEFAULT 'new',
+    attempts int NOT NULL DEFAULT '0',
+    last_error varchar(250) NULL,
+    sent_on timestamp NULL,
+    created_on timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY(id),
+    KEY(status_id),
+    CONSTRAINT `foreign_reference_iot_notification_config_id` FOREIGN KEY(config_id) REFERENCES iot_agent_config(id) ON DELETE SET NULL,
+    CONSTRAINT `foreign_reference_iot_notification_status_id` FOREIGN KEY(status_id) REFERENCES iot_notification_status(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 INSERT IGNORE INTO api_user (id,username,password,is_admin,disabled,solution_id) VALUES (10000,'IoTSrv','password',0,0,10000);
@@ -627,6 +665,14 @@ INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,des
     VALUES
     (10028,'iot_agent_status','iot_agent_status','id','int','message',10000);
 
+INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
+    VALUES
+    (10029,'iot_notification_status','iot_notification_status','id','string','name',10000);
+
+INSERT IGNORE INTO api_table(id,alias,table_name,id_field_name,id_field_type,desc_field_name,solution_id)
+    VALUES
+    (10030,'iot_notification','iot_notification','id','int','message',10000);
+
 
 INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10017, 'ID','id','int','{"disabled": true}');
 INSERT IGNORE INTO api_table_field (table_id,label,name,type_id,control_config) VALUES(10017, 'Erstellt am','created_on','datetime','{"disabled": true}');
@@ -738,6 +784,21 @@ call api_proc_create_table_field_instance(10028,400, 'exit_code','Exitcode','int
 call api_proc_create_table_field_instance(10028,500, 'duration_sec','Dauer (Sek.)','decimal',14,'{"disabled": true}', @out_value);
 call api_proc_create_table_field_instance(10028,600, 'message','Meldung','string',1,'{"disabled": true}', @out_value);
 call api_proc_create_table_field_instance(10028,700, 'created_on','Erstellt am','datetime',9,'{"disabled": true}', @out_value);
+
+/* iot_notification_status */
+call api_proc_create_table_field_instance(10029,100, 'id','ID','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10029,200, 'name','Bezeichnung','string',1,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10029,300, 'created_on','Erstellt am','datetime',9,'{"disabled": true}', @out_value);
+
+/* iot_notification */
+call api_proc_create_table_field_instance(10030,100, 'id','ID','int',14,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10030,200, 'config_id','Agent','int',2,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10030,300, 'message','Meldung','string',1,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10030,400, 'status_id','Status','string',2,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10030,500, 'attempts','Versuche','int',14,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10030,600, 'last_error','Letzter Fehler','string',1,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10030,700, 'sent_on','Gesendet am','datetime',9,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10030,800, 'created_on','Erstellt am','datetime',9,'{"disabled": true}', @out_value);
 
 
 
@@ -896,6 +957,12 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
     VALUES
     (10000,10028,-1,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
+    VALUES
+    (10000,10029,0,-1,0,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,solution_id)
+    VALUES
+    (10000,10030,-1,-1,-1,10000);
 
 
 
@@ -988,6 +1055,12 @@ INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read
 INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
     VALUES
     (10001,10028,-1,-1,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
+    VALUES
+    (10001,10029,-1,-1,-1,-1,10000);
+INSERT IGNORE INTO api_group_permission (group_id,table_id,mode_create,mode_read,mode_update,mode_delete,solution_id)
+    VALUES
+    (10001,10030,-1,-1,-1,-1,10000);
 
 
 
@@ -1114,6 +1187,9 @@ INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) 
 
 INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
 10017,10000,'Agenten Status','/ui/v1.0/data/view/iot_agent_status/default',1,10000);
+
+INSERT IGNORE INTO api_ui_app_nav_item(id, app_id,name,url,type_id,solution_id) VALUES (
+10018,10000,'Benachrichtigungen','/ui/v1.0/data/view/iot_notification/default',1,10000);
 
 
 INSERT IGNORE INTO api_mqtt_message_bus (id, topic, regex, alias, solution_id) VALUES (100000001, '+/rpc', '^shelly.*/rpc$', 'iot_shelly/',10000);
@@ -1613,3 +1689,26 @@ INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,soluti
         <field name="config_id" alias="s" sort="ASC"/>
     </orderby>
 </restapi>', '{"id": {},"config_id": {},"last_start_on": {},"exit_code": {},"duration_sec": {},"message": {}}');
+
+INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml, columns) VALUES (
+10033,'LISTVIEW','default',10029,'id',10000,'<restapi type="select">
+    <table name="iot_notification_status" alias="s"/>
+    <filter type="or">
+        <condition field="name" alias="s" value="$$query$$" operator="$$operator$$"/>
+    </filter>
+    <orderby>
+        <field name="id" alias="s" sort="ASC"/>
+    </orderby>
+</restapi>', '{"id": {},"name": {}}');
+
+INSERT IGNORE INTO api_table_view (id,type_id,name,table_id,id_field_name,solution_id,fetch_xml, columns) VALUES (
+10034,'LISTVIEW','default',10030,'id',10000,'<restapi type="select">
+    <table name="iot_notification" alias="n"/>
+    <filter type="or">
+        <condition field="message" alias="n" value="$$query$$" operator="$$operator$$"/>
+        <condition field="status_id" alias="n" value="$$query$$" operator="$$operator$$"/>
+    </filter>
+    <orderby>
+        <field name="id" alias="n" sort="DESC"/>
+    </orderby>
+</restapi>', '{"id": {},"created_on": {},"config_id": {},"status_id": {},"attempts": {},"sent_on": {},"message": {},"last_error": {}}');
