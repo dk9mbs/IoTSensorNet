@@ -540,9 +540,13 @@ CREATE TABLE IF NOT EXISTS iot_notification(
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 /* Agenten-Tabellen auf utf8mb4 (Meldungen enthalten Emojis mit 4 Byte).
-   Fuer bestehende Installationen; alle zusammen, weil die Fremdschluessel-
-   Spalten denselben Zeichensatz haben muessen. Mehrfach ausfuehrbar. */
-SET FOREIGN_KEY_CHECKS=0;
+   Fuer bestehende Installationen. MariaDB aendert keine Spalte, die in einem
+   Fremdschluessel steckt (auch nicht mit FOREIGN_KEY_CHECKS=0), daher die
+   Fremdschluessel auf Textspalten erst entfernen, dann alle Tabellen
+   umstellen und die Fremdschluessel neu anlegen. Mehrfach ausfuehrbar. */
+ALTER TABLE iot_agent_config DROP FOREIGN KEY IF EXISTS `foreign_reference_iot_agent_config_host_id`;
+ALTER TABLE iot_agent_config DROP FOREIGN KEY IF EXISTS `foreign_reference_iot_agent_config_agent`;
+ALTER TABLE iot_notification DROP FOREIGN KEY IF EXISTS `foreign_reference_iot_notification_status_id`;
 ALTER TABLE iot_agent_host CONVERT TO CHARACTER SET utf8mb4;
 ALTER TABLE iot_agent_output_type CONVERT TO CHARACTER SET utf8mb4;
 ALTER TABLE iot_agent CONVERT TO CHARACTER SET utf8mb4;
@@ -550,7 +554,12 @@ ALTER TABLE iot_agent_config CONVERT TO CHARACTER SET utf8mb4;
 ALTER TABLE iot_agent_status CONVERT TO CHARACTER SET utf8mb4;
 ALTER TABLE iot_notification_status CONVERT TO CHARACTER SET utf8mb4;
 ALTER TABLE iot_notification CONVERT TO CHARACTER SET utf8mb4;
-SET FOREIGN_KEY_CHECKS=1;
+ALTER TABLE iot_agent_config ADD CONSTRAINT `foreign_reference_iot_agent_config_host_id`
+    FOREIGN KEY IF NOT EXISTS (host_id) REFERENCES iot_agent_host(id);
+ALTER TABLE iot_agent_config ADD CONSTRAINT `foreign_reference_iot_agent_config_agent`
+    FOREIGN KEY IF NOT EXISTS (agent) REFERENCES iot_agent(id);
+ALTER TABLE iot_notification ADD CONSTRAINT `foreign_reference_iot_notification_status_id`
+    FOREIGN KEY IF NOT EXISTS (status_id) REFERENCES iot_notification_status(id);
 
 INSERT IGNORE INTO api_user (id,username,password,is_admin,disabled,solution_id) VALUES (10000,'IoTSrv','password',0,0,10000);
 INSERT IGNORE INTO api_user (id,username,password,is_admin,disabled,solution_id) VALUES (10001,'IoTAdmin','password',0,-1,10000);
