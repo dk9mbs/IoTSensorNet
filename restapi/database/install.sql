@@ -464,6 +464,7 @@ INSERT IGNORE INTO iot_agent(id, description) VALUES ('omada_syslog', 'WLAN-Scor
 INSERT IGNORE INTO iot_agent(id, description) VALUES ('notify', 'Benachrichtigungen (Nextcloud Talk, Telegram)');
 INSERT IGNORE INTO iot_agent(id, description) VALUES ('disk_usage', 'Festplattenbelegung des Rechners');
 INSERT IGNORE INTO iot_agent(id, description, output_type_id) VALUES ('watchdog', 'Erkennt auffaellige Geraete/Sensoren, stellt Meldungen in iot_notification', 1);
+INSERT IGNORE INTO iot_agent(id, description, output_type_id) VALUES ('shelly_syslog', 'Bewertet die Zugriffe auf die Shellys aus deren Syslogs', 2);
 /* notify verschickt nur noch die Warteschlange iot_notification und setzt sie ueber den Runner auf erledigt */
 UPDATE iot_agent SET description='Verschickt die Meldungen aus iot_notification (Nextcloud Talk, Telegram)', output_type_id=5
     WHERE id='notify' AND output_type_id=1;
