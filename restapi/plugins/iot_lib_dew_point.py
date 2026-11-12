@@ -11,6 +11,9 @@ class iot_LibDewPoint:
     def get_dew_point(self):
         return self._dew_point
 
+    def get_absolute_humidity(self):
+        return self._absolute_humidity
+
     def calc (self):
         a=0
         b=0
@@ -39,5 +42,9 @@ class iot_LibDewPoint:
         #td =  math.round(td * 100) / 100
 
         self._dew_point=td
+
+        # Absolute Feuchte (g/m³) = 10^5 * mw/R* * dd/T(K), mw=18.016, R*=8314.3
+        af = 216.7 * dd / (273.15 + self._celsius)
+        self._absolute_humidity=round(af,2)
         #return td
 
