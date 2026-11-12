@@ -70,10 +70,10 @@ def execute(context, plugin_context, params):
                     <fields>
                         <field name="sensor_id" value="{rec['abs_hum_sensor_id']}"/>
                         <field name="sensor_namespace" value="restapi"/>
-                        <field name="sensor_value" value="0"/>
+                        <field name="sensor_value" value="{dew_point.get_absolute_humidity()}"/>
                     </fields>
                 </restapi>
                 """
 
-                #fetchparser=FetchXmlParser(fetch, context)
-                #DatabaseServices.exec(fetchparser, context, run_as_system=True)            
+                fetchparser=FetchXmlParser(fetch, context)
+                DatabaseServices.exec(fetchparser, context, run_as_system=True)            
