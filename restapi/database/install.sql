@@ -316,6 +316,11 @@ CREATE TABLE IF NOT EXISTS iot_sensor (
 ALTER TABLE iot_sensor ADD COLUMN IF NOT EXISTS type_id int NULL;
 ALTER TABLE iot_sensor ADD CONSTRAINT  FOREIGN KEY IF NOT EXISTS (type_id) REFERENCES iot_sensor_type (id);
 ALTER TABLE iot_sensor ADD COLUMN IF NOT EXISTS notify smallint NOT NULL DEFAULT '-1' COMMENT 'Notify in case of watchdog errors';
+ALTER TABLE iot_sensor ADD COLUMN IF NOT EXISTS store_min_interval_sec int NULL COMMENT 'Min. seconds between two values stored because of a change';
+ALTER TABLE iot_sensor ADD COLUMN IF NOT EXISTS store_max_interval_sec int NULL COMMENT 'Heartbeat: store at the latest after x sec. NULL=no throttling';
+ALTER TABLE iot_sensor ADD COLUMN IF NOT EXISTS store_deadband decimal(10,4) NULL COMMENT 'Min. change to store immediately. NULL or 0=heartbeat only';
+ALTER TABLE iot_sensor ADD COLUMN IF NOT EXISTS store_last_value decimal(18,4) NULL COMMENT 'Last stored value (iot_sensor_throttle)';
+ALTER TABLE iot_sensor ADD COLUMN IF NOT EXISTS store_last_on datetime NULL COMMENT 'Last stored on (iot_sensor_throttle)';
 
 CREATE TABLE IF NOT EXISTS iot_sensor_routing_status(
     id int NOT NULL,
@@ -717,6 +722,11 @@ call api_proc_create_table_field_instance(10001,1000, 'auto_delete_sensor_data',
 call api_proc_create_table_field_instance(10001,1100, 'watchdog_warning_sec','Watchdog in Sek.','int',14,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10001,1200, 'type_id','Typ','int',2,'{"disabled": false}', @out_value);
 call api_proc_create_table_field_instance(10001,1300, 'notify','Benachrichtigungen','int',19,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,1400, 'store_min_interval_sec','Speichern: Mindestabstand bei Änderung (Sek.)','int',14,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,1500, 'store_max_interval_sec','Speichern: spätestens nach (Sek.)','int',14,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,1600, 'store_deadband','Speichern: Mindeständerung','decimal',14,'{"disabled": false}', @out_value);
+call api_proc_create_table_field_instance(10001,1700, 'store_last_value','Zuletzt gespeicherter Wert','decimal',14,'{"disabled": true}', @out_value);
+call api_proc_create_table_field_instance(10001,1800, 'store_last_on','Zuletzt gespeichert am','datetime',9,'{"disabled": true}', @out_value);
 
 /* iot_device */
 call api_proc_create_table_field_instance(10012,100, 'id','ID','string',1,'{"disabled": false}', @out_value);
@@ -1149,6 +1159,12 @@ INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type
 
 INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,run_async,solution_id)
     VALUES (10000020,'iot_plugin_shelly_ble_sensor','iot_shelly_ble_events','mqtt_message','after',100,0,10000);
+
+INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,run_async,solution_id)
+    VALUES (10000050,'iot_sensor_throttle','iot_sensor_data','insert','before',200,0,10000);
+
+INSERT IGNORE INTO api_event_handler (id,plugin_module_name,publisher,event,type,sorting,run_async,solution_id)
+    VALUES (10000051,'iot_sensor_throttle','iot_sensor_data','insert','after',200,0,10000);
 
 
 
